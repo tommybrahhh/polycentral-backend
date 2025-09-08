@@ -17,14 +17,8 @@ const PORT = process.env.PORT || 3001;
 // Security middleware
 app.use(helmet());
 // Configure CORS dynamically based on environment
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',')
-  : [
-      'http://localhost:3000',
-      'http://127.0.0.1:5500',
-      'http://localhost:5500',
-      'https://polycentral-frontend.vercel.app'
-    ];
+const raw = process.env.CORS_ORIGIN || '';
+const allowedOrigins = raw.split(',').map(o => o.trim()).filter(Boolean);
 
 app.use(cors({
     origin: function (origin, callback) {
@@ -82,6 +76,12 @@ const db = new sqlite3.Database('./predictions.db', (err) => {
         db.run('PRAGMA synchronous = NORMAL');
     }
 });
+
+// helper: make sure options is always an array
+function fmt(t) {
+if (t.options && typeof t.options === 'string') t.options = JSON.parse(t.options);
+return t;
+}
 
 // Create tables if they don't exist
 db.serialize(() => {
@@ -385,10 +385,7 @@ app.get('/api/tournaments', (req, res) => {
             return res.status(500).json({ error: 'Failed to fetch tournaments' });
         }
 
-        const formattedTournaments = tournaments.map(t => ({
-            ...t,
-            options: JSON.parse(t.options)
-        }));
+        const formattedTournaments = tournaments.map(fmt);
 
         console.log(`✅ Returning ${formattedTournaments.length} tournaments`);
         res.json(formattedTournaments);
@@ -553,6 +550,8 @@ app.post('/api/admin/tournaments/:id/resolve', (req, res) => {
                     console.log(`🏁 Tournament ${tournamentId} resolved, no winners`);
                     return res.json({ success: true, message: 'Tournament resolved, no winners' });
                 }
+
+                winners.forEach(w => fmt(w));
 
                 // Distribute prizes
                 const prizePerWinner = Math.floor(winners[0].prize_pool / winners.length);
