@@ -1,0 +1,2001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PolyCentral - Prediction Market</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Import Modern Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap');
+
+        /* Enhanced Color System from colours.json + Gaming Aesthetics */
+        :root {
+            /* Base Colors from design.json */
+            --background: #000000;
+            --foreground: #FFFFFF;
+            --card: #1E1E1E;
+            --card-foreground: #FFFFFF;
+            --primary: #FF6F00;
+            --primary-foreground: #FFFFFF;
+            --secondary: #1E1E1E;
+            --secondary-foreground: #FFFFFF;
+            --muted: #333333;
+            --muted-foreground: #FFFFFF;
+            --accent: #A5FF90;
+            --accent-foreground: #000000;
+            --destructive: #FF0000;
+            --destructive-foreground: #FFFFFF;
+            --border: #333333;
+            --input: #1E1E1E;
+            --ring: #FF6F00;
+            
+            /* Updated Gaming UI Colors */
+            --neon-blue: #FF6F00;
+            --neon-orange: #FF6F00;
+            --neon-green: #FF6F00;
+            --neon-purple: #FF6F00;
+            --neon-pink: #FF6F00;
+            --font-sans: 'Segoe UI', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'Fira Code', monospace;
+
+            /* Updated Spacing Scale */
+            --spacing-xs: 8px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --spacing-2xl: 48px;
+            --spacing-3xl: 64px;
+            
+            /* Updated Border Radius */
+            --radius-sm: 6px;
+            --radius-md: 6px;
+            --radius-lg: 8px;
+            --radius-xl: 8px;
+            --radius-2xl: 8px;
+            --radius-3xl: 8px;
+
+            /* Updated Shadows */
+            --shadow-glow-sm: 0px 4px 12px rgba(0, 0, 0, 0.3);
+            --shadow-glow-md: 0px 4px 12px rgba(0, 0, 0, 0.3);
+            --shadow-glow-lg: 0px 4px 12px rgba(0, 0, 0, 0.3);
+            --shadow-neon: 0px 2px 6px rgba(255, 111, 0, 0.4);
+            --shadow-neon-orange: 0px 2px 6px rgba(255, 111, 0, 0.4);
+            --shadow-neon-green: 0px 2px 6px rgba(165, 255, 144, 0.4);
+        /* Additional variables for backend integration */
+        --text-xs: 0.75rem;
+        --text-sm: 0.875rem;
+        --text-base: 1rem;
+        --text-lg: 1.125rem;
+        --text-xl: 1.25rem;
+        --text-2xl: 1.5rem;
+        --text-3xl: 1.875rem;
+        --text-4xl: 2.25rem;
+
+        --glass-bg: rgba(30, 30, 30, 0.8);
+        --glass-blur: 10px;
+        --glass-border: rgba(51, 51, 51, 0.5);
+
+        --gradient-primary: linear-gradient(135deg, #FF6F00 0%, #FF8F00 100%);
+        --gradient-secondary: linear-gradient(135deg, #1E1E1E 0%, #333333 100%);
+        --gradient-success: linear-gradient(135deg, #A5FF90 0%, #22C55E 100%);
+        --gradient-card: linear-gradient(135deg, #1E1E1E 0%, #2A2A2A 100%);
+
+        --chart-1: #7C9CFC;
+        --chart-2: #FB9260;
+        --chart-3: #575349;
+        --chart-4: #A855F7;
+        }
+
+        /* Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--background);
+            color: var(--foreground);
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            min-height: 100vh;
+            font-weight: 400;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-lg);
+        }
+
+        /* Header - Futuristic Gaming Style */
+        .header {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border-bottom: 1px solid var(--glass-border);
+            padding: var(--spacing-md) 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-glow-sm);
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-lg);
+        }
+
+        .logo {
+            font-size: var(--text-2xl);
+            font-weight: 800;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-decoration: none;
+            letter-spacing: -0.025em;
+            text-transform: uppercase;
+        }
+
+        .main-nav {
+            display: flex;
+            gap: var(--spacing-xl);
+        }
+
+        .nav-link {
+            color: var(--muted-foreground);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: var(--text-sm);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-md);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: var(--foreground);
+            background: var(--glass-bg);
+            box-shadow: var(--shadow-glow-sm);
+        }
+
+        .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 2px;
+            background: var(--gradient-primary);
+            border-radius: 1px;
+        }
+
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+        }
+
+        .user-points {
+            background: var(--gradient-card);
+            padding: var(--spacing-sm) var(--spacing-lg);
+            border-radius: var(--radius-3xl);
+            border: 1px solid var(--glass-border);
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--neon-green);
+            text-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
+            box-shadow: var(--shadow-glow-sm);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--gradient-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-glow-md);
+        }
+
+        .user-avatar:hover {
+            transform: scale(1.1);
+            box-shadow: var(--shadow-neon);
+        }
+
+        /* Daily Challenge - Enhanced Gaming Style */
+        .daily-challenge-section {
+            margin: var(--spacing-3xl) 0;
+        }
+
+        .daily-challenge-card {
+            background: var(--gradient-card);
+            border: 2px solid transparent;
+            background-clip: padding-box;
+            border-radius: var(--radius-2xl);
+            padding: var(--spacing-2xl);
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-glow-lg);
+        }
+
+        .daily-challenge-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient-success);
+            animation: shimmer 3s ease-in-out infinite;
+        }
+
+        .daily-challenge-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            background: var(--gradient-success);
+            border-radius: var(--radius-2xl);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask-composite: xor;
+            pointer-events: none;
+        }
+
+        .challenge-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .challenge-title {
+            font-size: var(--text-3xl);
+            font-weight: 800;
+            color: var(--foreground);
+            margin-bottom: var(--spacing-xs);
+            text-transform: uppercase;
+            letter-spacing: -0.025em;
+        }
+
+        .challenge-subtitle {
+            color: var(--muted-foreground);
+            font-size: var(--text-base);
+            font-weight: 500;
+        }
+
+        .challenge-timer {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            padding: var(--spacing-sm) var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            font-size: var(--text-sm);
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--neon-orange);
+            text-shadow: 0 0 10px rgba(251, 146, 60, 0.3);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--shadow-glow-sm);
+        }
+
+        .challenge-question {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 2px solid var(--neon-green);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+            text-align: center;
+            font-size: var(--text-xl);
+            font-weight: 600;
+            color: var(--foreground);
+            box-shadow: var(--shadow-neon-green);
+        }
+
+        .challenge-streak {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+            font-size: var(--text-sm);
+        }
+
+        .streak-info {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+        }
+
+        .streak-number {
+            color: var(--neon-orange);
+            font-weight: 800;
+            font-family: var(--font-mono);
+            text-shadow: 0 0 10px rgba(251, 146, 60, 0.3);
+        }
+
+        /* Simplified Button Styles */
+        .btn-claim-daily,
+        .btn-explore-tournaments,
+        .btn-enter-tournament,
+        .btn-view-leaderboard {
+            background: var(--primary);
+            color: var(--primary-foreground);
+            border: none;
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0px 2px 6px rgba(255, 111, 0, 0.4);
+        }
+
+        .btn-claim-daily:hover,
+        .btn-explore-tournaments:hover,
+        .btn-enter-tournament:hover,
+        .btn-view-leaderboard:hover {
+            transform: scale(1.05);
+            box-shadow: 0px 4px 12px rgba(255, 111, 0, 0.6);
+        }
+
+        /* Stats Dashboard - Gaming Enhancement */
+        .stats-dashboard {
+            background: var(--gradient-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-2xl);
+            padding: var(--spacing-2xl);
+            margin-bottom: var(--spacing-3xl);
+            box-shadow: var(--shadow-glow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stats-dashboard::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--gradient-primary);
+        }
+
+        .stats-header {
+            font-size: var(--text-2xl);
+            font-weight: 700;
+            margin-bottom: var(--spacing-xl);
+            color: var(--foreground);
+            text-transform: uppercase;
+            letter-spacing: -0.025em;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: var(--spacing-lg);
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+            padding: var(--spacing-lg);
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-item:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: var(--shadow-glow-md);
+            border-color: var(--ring);
+        }
+
+        .stat-item:hover::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--gradient-primary);
+            opacity: 0.05;
+            pointer-events: none;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: var(--text-xl);
+            font-weight: 700;
+            position: relative;
+        }
+
+        .stat-icon.points { 
+            background: var(--gradient-success);
+            color: white;
+            box-shadow: var(--shadow-neon-green);
+        }
+
+        .stat-icon.accuracy { 
+            background: var(--gradient-primary);
+            color: white;
+            box-shadow: var(--shadow-neon);
+        }
+
+        .stat-icon.rank { 
+            background: var(--gradient-secondary);
+            color: white;
+            box-shadow: var(--shadow-neon-orange);
+        }
+
+        .stat-icon.streak { 
+            background: linear-gradient(135deg, var(--neon-orange) 0%, var(--neon-pink) 100%);
+            color: white;
+            box-shadow: var(--shadow-neon-orange);
+        }
+
+        .stat-content {
+            flex: 1;
+        }
+
+        .stat-value {
+            font-size: var(--text-2xl);
+            font-weight: 800;
+            color: var(--foreground);
+            display: block;
+            font-family: var(--font-mono);
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: var(--text-sm);
+            color: var(--muted-foreground);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 500;
+        }
+
+        .stat-change {
+            font-size: var(--text-xs);
+            color: var(--neon-green);
+            font-weight: 700;
+            text-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+        }
+
+        /* CTA Banner - Enhanced */
+        .cta-banner {
+            background: var(--gradient-primary);
+            border-radius: var(--radius-2xl);
+            padding: var(--spacing-2xl);
+            text-align: center;
+            margin-bottom: var(--spacing-3xl);
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-neon);
+        }
+
+        .cta-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+            animation: shine 4s ease-in-out infinite;
+        }
+
+        .cta-title {
+            font-size: var(--text-3xl);
+            font-weight: 800;
+            margin-bottom: var(--spacing-md);
+            text-transform: uppercase;
+            letter-spacing: -0.025em;
+        }
+
+        .cta-subtitle {
+            color: rgba(255,255,255,0.9);
+            margin-bottom: var(--spacing-xl);
+            font-size: var(--text-lg);
+            font-weight: 500;
+        }
+
+        /* Tournaments Section - Gaming Enhancement */
+        .tournaments-section {
+            margin-bottom: var(--spacing-3xl);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-2xl);
+        }
+
+        .section-title {
+            font-size: var(--text-3xl);
+            font-weight: 800;
+            color: var(--foreground);
+            text-transform: uppercase;
+            letter-spacing: -0.025em;
+        }
+
+        .category-tabs {
+            display: flex;
+            gap: var(--spacing-sm);
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            padding: var(--spacing-xs);
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--glass-border);
+        }
+
+        .tab-btn {
+            background: transparent;
+            color: var(--muted-foreground);
+            border: none;
+            padding: var(--spacing-sm) var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: var(--text-sm);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .tab-btn.active, .tab-btn:hover {
+            background: var(--gradient-primary);
+            color: white;
+            box-shadow: var(--shadow-neon);
+            transform: scale(1.05);
+        }
+
+        /* Hero Tournament - Premium Gaming Style */
+        .hero-tournament {
+            background: var(--gradient-card);
+            border: 3px solid transparent;
+            background-clip: padding-box;
+            border-radius: var(--radius-2xl);
+            padding: var(--spacing-3xl);
+            margin-bottom: var(--spacing-3xl);
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-glow-lg);
+        }
+
+        .hero-tournament::before {
+            content: 'FEATURED';
+            position: absolute;
+            top: var(--spacing-lg);
+            right: var(--spacing-lg);
+            background: var(--gradient-secondary);
+            color: white;
+            padding: var(--spacing-sm) var(--spacing-lg);
+            border-radius: var(--radius-xl);
+            font-size: var(--text-xs);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            box-shadow: var(--shadow-neon-orange);
+        }
+
+        .hero-tournament::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 3px;
+            background: var(--gradient-primary);
+            border-radius: var(--radius-2xl);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask-composite: xor;
+            pointer-events: none;
+        }
+
+        .tournament-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .tournament-title {
+            font-size: var(--text-3xl);
+            font-weight: 800;
+            margin-bottom: var(--spacing-xs);
+            text-transform: uppercase;
+            letter-spacing: -0.025em;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .tournament-subtitle {
+            color: var(--muted-foreground);
+            font-weight: 500;
+        }
+
+        .prize-pool {
+            text-align: right;
+        }
+
+        .prize-amount {
+            font-size: var(--text-4xl);
+            font-weight: 900;
+            color: var(--neon-green);
+            display: block;
+            font-family: var(--font-mono);
+            text-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+        }
+
+        .prize-usd {
+            color: var(--muted-foreground);
+            font-size: var(--text-base);
+            font-weight: 500;
+        }
+
+        .tournament-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .tournament-stat {
+            text-align: center;
+            padding: var(--spacing-lg);
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--glass-border);
+        }
+
+        .tournament-stat-value {
+            font-size: var(--text-xl);
+            font-weight: 800;
+            color: var(--foreground);
+            display: block;
+            font-family: var(--font-mono);
+        }
+
+        .tournament-stat-label {
+            font-size: var(--text-xs);
+            color: var(--muted-foreground);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 500;
+            margin-top: var(--spacing-xs);
+        }
+
+        /* Tournament Grid */
+        .tournaments-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: var(--spacing-xl);
+            margin-bottom: var(--spacing-3xl);
+        }
+
+        .tournament-card {
+            background: var(--gradient-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-xl);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-glow-md);
+        }
+
+        .tournament-card:hover {
+            border-color: var(--ring);
+            transform: translateY(-6px) scale(1.02);
+            box-shadow: var(--shadow-glow-lg);
+        }
+
+        .tournament-card:hover::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--gradient-primary);
+            opacity: 0.05;
+            pointer-events: none;
+        }
+
+        /* Live Rankings - Enhanced Gaming Style */
+        .live-rankings {
+            background: var(--gradient-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-2xl);
+            padding: var(--spacing-2xl);
+            box-shadow: var(--shadow-glow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .live-rankings::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-secondary);
+        }
+
+        .rankings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .rankings-title {
+            font-size: var(--text-2xl);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: -0.025em;
+        }
+
+        .your-rank {
+            color: var(--neon-green);
+            font-weight: 800;
+            font-family: var(--font-mono);
+            text-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
+        }
+
+        .rankings-table {
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-lg);
+            padding: var(--spacing-md) var(--spacing-lg);
+            margin-bottom: var(--spacing-sm);
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            transition: all 0.3s ease;
+        }
+
+        .ranking-item:hover {
+            transform: translateX(4px);
+            background: var(--glass-bg);
+            border-color: var(--ring);
+        }
+
+        .rank-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--gradient-primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-family: var(--font-mono);
+            box-shadow: var(--shadow-neon);
+        }
+
+        .player-name {
+            flex: 1;
+            font-weight: 600;
+            font-size: var(--text-base);
+            color: var(--foreground);
+        }
+
+        .player-points {
+            color: var(--neon-green);
+            font-weight: 800;
+            font-family: var(--font-mono);
+            text-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+        }
+
+        .user-stats-summary {
+            display: flex;
+            justify-content: space-between;
+            padding: var(--spacing-lg);
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-xl);
+            margin-bottom: var(--spacing-lg);
+            border: 1px solid var(--glass-border);
+        }
+
+        .summary-stat {
+            text-align: center;
+        }
+
+        .summary-value {
+            font-weight: 800;
+            color: var(--neon-orange);
+            font-family: var(--font-mono);
+            font-size: var(--text-lg);
+            text-shadow: 0 0 8px rgba(251, 146, 60, 0.3);
+        }
+
+        .summary-label {
+            font-size: var(--text-xs);
+            color: var(--muted-foreground);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 500;
+            margin-top: var(--spacing-xs);
+        }
+
+        /* Success State for Daily Challenge */
+        .challenge-success {
+            background: var(--gradient-success);
+            color: white;
+            text-align: center;
+            padding: var(--spacing-3xl);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-neon-green);
+        }
+
+        .success-icon {
+            font-size: 4rem;
+            margin-bottom: var(--spacing-lg);
+            filter: drop-shadow(0 0 20px rgba(34, 197, 94, 0.5));
+        }
+
+        .success-title {
+            font-size: var(--text-3xl);
+            font-weight: 800;
+            margin-bottom: var(--spacing-md);
+            text-transform: uppercase;
+            letter-spacing: -0.025em;
+        }
+
+        .success-message {
+            opacity: 0.9;
+            font-size: var(--text-lg);
+            font-weight: 500;
+        }
+
+        /* Modal Styles - Enhanced Gaming */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .modal-content {
+            background: var(--gradient-card);
+            border: 2px solid var(--glass-border);
+            border-radius: var(--radius-2xl);
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            z-index: 1001;
+            box-shadow: var(--shadow-glow-lg);
+            animation: modalSlideUp 0.3s ease-out;
+        }
+
+        .modal-header {
+            padding: var(--spacing-xl);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            font-size: var(--text-2xl);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: -0.025em;
+        }
+
+        .modal-close {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            color: var(--muted-foreground);
+            font-size: var(--text-xl);
+            cursor: pointer;
+            padding: var(--spacing-sm);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .modal-close:hover {
+            background: var(--destructive);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .modal-body {
+            padding: var(--spacing-xl);
+        }
+
+        .modal-footer {
+            padding: var(--spacing-xl);
+            border-top: 1px solid var(--glass-border);
+        }
+
+        /* User Dropdown - Gaming Style */
+        .user-dropdown {
+            position: absolute;
+            top: 70px;
+            right: var(--spacing-lg);
+            background: var(--gradient-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
+            min-width: 280px;
+            box-shadow: var(--shadow-glow-lg);
+            z-index: 1000;
+            animation: dropdownSlideDown 0.3s ease-out;
+        }
+
+        .dropdown-content {
+            padding: var(--spacing-lg);
+        }
+
+        .dropdown-item {
+            padding: var(--spacing-md);
+            cursor: pointer;
+            border-radius: var(--radius-md);
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .dropdown-item:hover {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            transform: translateX(4px);
+        }
+
+        .dropdown-item strong {
+            color: var(--neon-orange);
+            font-weight: 700;
+        }
+
+        /* Animations */
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        @keyframes shine {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes modalSlideUp {
+            from { 
+                transform: translateY(50px); 
+                opacity: 0; 
+            }
+            to { 
+                transform: translateY(0); 
+                opacity: 1; 
+            }
+        }
+
+        @keyframes dropdownSlideDown {
+            from { 
+                transform: translateY(-10px); 
+                opacity: 0; 
+            }
+            to { 
+                transform: translateY(0); 
+                opacity: 1; 
+            }
+        }
+
+        @keyframes highlight {
+            0% { 
+                transform: scale(1); 
+                box-shadow: var(--shadow-glow-md); 
+            }
+            50% { 
+                transform: scale(1.02); 
+                box-shadow: var(--shadow-neon); 
+            }
+            100% { 
+                transform: scale(1); 
+                box-shadow: var(--shadow-glow-md); 
+            }
+        }
+
+        @keyframes glow {
+            0%, 100% { 
+                text-shadow: 0 0 5px currentColor; 
+            }
+            50% { 
+                text-shadow: 0 0 20px currentColor, 0 0 30px currentColor; 
+            }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header-content {
+                padding: 0 var(--spacing-md);
+            }
+            
+            .main-nav {
+                display: none;
+            }
+            
+            .container {
+                padding: 0 var(--spacing-md);
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .tournament-header {
+                flex-direction: column;
+                gap: var(--spacing-lg);
+            }
+            
+            .tournaments-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .category-tabs {
+                flex-wrap: wrap;
+            }
+            
+            .challenge-header {
+                flex-direction: column;
+                gap: var(--spacing-md);
+            }
+            
+            .challenge-streak {
+                flex-direction: column;
+                gap: var(--spacing-md);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .daily-challenge-card {
+                padding: var(--spacing-xl);
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .hero-tournament {
+                padding: var(--spacing-xl);
+            }
+            
+            .tournament-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .user-stats-summary {
+                flex-direction: column;
+                gap: var(--spacing-md);
+            }
+        }
+
+        /* Utility Classes */
+        .text-success { color: var(--neon-green); }
+        .text-warning { color: var(--neon-orange); }
+        .text-danger { color: var(--destructive); }
+        .text-muted { color: var(--muted-foreground); }
+        .text-gradient-primary { 
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hidden { display: none; }
+        .visible { display: block; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--muted);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--gradient-primary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gradient-secondary);
+        }
+
+        /* Focus States for Accessibility */
+        *:focus-visible {
+            outline: 2px solid var(--ring);
+            outline-offset: 2px;
+        }
+
+        /* Print Styles */
+        @media print {
+            .header,
+            .user-dropdown,
+            .modal {
+                display: none !important;
+            }
+            
+            .container {
+                max-width: none;
+                padding: 0;
+            }
+        }
+        /* Category Badges using colors from colors.json */
+        .category-badge {
+            display: inline-block;
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--radius-md);
+            font-size: var(--text-xs);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .crypto-badge {
+            background: var(--primary);
+            color: var(--primary-foreground);
+        }
+
+        .stocks-badge {
+            background: var(--chart-2);
+            color: white;
+        }
+
+        .politics-badge {
+            background: var(--chart-3);
+            color: white;
+        }
+
+        /* Tournament Urgency Badges */
+        .tournament-urgency-badge {
+            position: absolute;
+            top: var(--spacing-md);
+            left: var(--spacing-md);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--radius-md);
+            font-size: var(--text-xs);
+            font-weight: 700;
+            z-index: 2;
+        }
+
+        .tournament-urgency-badge {
+            background: var(--gradient-secondary);
+            color: white;
+        }
+
+        .rising-badge {
+            background: var(--chart-1);
+            color: white;
+        }
+
+        /* Category Section Titles */
+        .category-section-title {
+            font-size: var(--text-2xl);
+            font-weight: 700;
+            color: var(--foreground);
+            margin-bottom: var(--spacing-xl);
+            text-transform: uppercase;
+            letter-spacing: -0.025em;
+        }
+
+        /* Tournament Categories Display Logic */
+        .tournament-category {
+            display: none;
+        }
+
+        .tournament-category.active {
+            display: block;
+        }
+
+        /* Tournament Card Variations */
+        .tournament-card {
+            position: relative;
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .tournament-card-title {
+            font-size: var(--text-lg);
+            font-weight: 700;
+            color: var(--foreground);
+            margin-bottom: var(--spacing-md);
+            text-transform: uppercase;
+            letter-spacing: -0.025em;
+        }
+
+        .hot-card {
+            border: 2px solid var(--neon-orange);
+            box-shadow: var(--shadow-neon-orange);
+        }
+
+        .rising-card {
+            border: 2px solid var(--chart-1);
+            box-shadow: 0 0 20px rgba(113, 156, 252, 0.3);
+        }
+
+        /* Enhanced Tab System */
+        .category-tabs {
+            margin-bottom: var(--spacing-2xl);
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .tab-btn {
+            position: relative;
+            min-width: 100px;
+        }
+
+        .tab-btn.active::before {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 3px;
+            background: var(--gradient-primary);
+            border-radius: var(--radius-xs);
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .category-tabs {
+                padding: var(--spacing-xs);
+                gap: var(--spacing-xs);
+            }
+            
+            .tab-btn {
+                padding: var(--spacing-xs) var(--spacing-sm);
+                font-size: var(--text-xs);
+                min-width: 80px;
+            }
+            
+            .tournament-urgency-badge {
+                top: var(--spacing-sm);
+                left: var(--spacing-sm);
+            }
+        }
+        /* Tournament Display Structure */
+        .tournament-display-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: var(--spacing-lg);
+            margin-bottom: var(--spacing-2xl);
+            min-height: 400px;
+        }
+
+        .main-tournament-display {
+            background: var(--gradient-card);
+            border: 3px solid var(--primary);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-2xl);
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-glow-lg);
+        }
+
+        .sub-tournament-display {
+            background: var(--gradient-card);
+            border: 2px solid var(--chart-1);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-glow-md);
+            transition: all 0.4s ease;
+            cursor: pointer;
+        }
+
+        .sub-tournament-display:hover {
+            transform: translateY(-8px) scale(1.03);
+            border-color: var(--neon-orange);
+            box-shadow: var(--shadow-neon-orange);
+        }
+
+        .sub-tournament-display.hot {
+            border-color: var(--neon-orange);
+        }
+
+        .sub-tournament-display.rising {
+            border-color: var(--chart-1);
+        }
+
+        /* Category Filter Buttons */
+        .category-filter-bar {
+            display: flex;
+            justify-content: center;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-2xl);
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            padding: var(--spacing-md);
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--glass-border);
+        }
+
+        .category-filter-btn {
+            background: transparent;
+            color: var(--muted-foreground);
+            border: 2px solid transparent;
+            padding: var(--spacing-sm) var(--spacing-xl);
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: var(--text-sm);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .category-filter-btn.all {
+            background: var(--gradient-success);
+            color: white;
+            box-shadow: var(--shadow-neon-green);
+        }
+
+        .category-filter-btn.crypto {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .category-filter-btn.crypto.active {
+            background: var(--primary);
+            color: var(--primary-foreground);
+            box-shadow: 0 0 20px rgba(100, 116, 139, 0.4);
+        }
+
+        .category-filter-btn.stocks {
+            border-color: var(--chart-2);
+            color: var(--chart-2);
+        }
+
+        .category-filter-btn.stocks.active {
+            background: var(--chart-2);
+            color: white;
+            box-shadow: 0 0 20px rgba(251, 146, 60, 0.4);
+        }
+
+        .category-filter-btn.politics {
+            border-color: var(--chart-3);
+            color: var(--chart-3);
+        }
+
+        .category-filter-btn.politics.active {
+            background: var(--chart-3);
+            color: white;
+            box-shadow: 0 0 20px rgba(87, 83, 78, 0.4);
+        }
+
+        /* Tournament Content Areas */
+        .tournament-content-area {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+            display: none;
+        }
+
+        .tournament-content-area.active {
+            opacity: 1;
+            transform: translateY(0);
+            display: block;
+            animation: fadeInUp 0.5s ease;
+        }
+
+        .relevant-tournaments-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: var(--spacing-lg);
+            margin-top: var(--spacing-xl);
+        }
+
+        .relevant-tournament-card {
+            background: var(--gradient-card);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .relevant-tournament-card:hover {
+            border-color: var(--ring);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-glow-lg);
+        }
+
+        /* Tournament Display Labels */
+        .tournament-display-label {
+            position: absolute;
+            top: var(--spacing-md);
+            right: var(--spacing-md);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--radius-md);
+            font-size: var(--text-xs);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            z-index: 2;
+        }
+
+        .label-main {
+            background: var(--gradient-primary);
+            color: white;
+            box-shadow: var(--shadow-neon);
+        }
+
+        .label-hot {
+            background: var(--gradient-secondary);
+            color: white;
+            box-shadow: var(--shadow-neon-orange);
+        }
+
+        .label-rising {
+            background: var(--chart-1);
+            color: white;
+        }
+
+        /* Animations */
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .tournament-display-grid {
+                grid-template-columns: 1fr;
+                gap: var(--spacing-md);
+                min-height: auto;
+            }
+            
+            .category-filter-bar {
+                flex-wrap: wrap;
+                gap: var(--spacing-xs);
+            }
+            
+            .category-filter-btn {
+                padding: var(--spacing-xs) var(--spacing-md);
+                font-size: var(--text-xs);
+            }
+        }
+        /* Tournament Display Structure - Corrected Layout */
+        .tournament-display-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: auto auto;
+            gap: var(--spacing-lg);
+            margin-bottom: var(--spacing-2xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .main-tournament-row {
+            width: 100%;
+        }
+
+        .sub-tournaments-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+        }
+
+        .main-tournament-display {
+            background: linear-gradient(135deg, var(--chart-2) 0%, var(--neon-orange) 100%);
+            border: 3px solid var(--neon-orange);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-2xl);
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-neon-orange);
+            cursor: pointer;
+            transition: all 0.4s ease;
+        }
+
+        .main-tournament-display:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: var(--shadow-neon-orange), 0 0 60px rgba(251, 146, 60, 0.4);
+        }
+
+        .sub-tournament-display {
+            background: linear-gradient(135deg, var(--chart-1) 0%, var(--neon-blue) 100%);
+            border: 3px solid var(--chart-1);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(113, 156, 252, 0.3);
+            transition: all 0.4s ease;
+            cursor: pointer;
+        }
+
+
+
+        .sub-tournament-display:hover {
+            transform: translateY(-12px) scale(1.05);
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 40px rgba(113, 156, 252, 0.5);
+        }
+
+
+        .tournaments-section > * {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Tournament Quick Stats Styling */
+        .tournament-quick-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: var(--spacing-lg);
+            gap: var(--spacing-md);
+        }
+
+        .quick-stat-item {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-number {
+            display: block;
+            font-size: var(--text-lg);
+            font-weight: 800;
+            color: white;
+            font-family: var(--font-mono);
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .stat-text {
+            font-size: var(--text-xs);
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        /* Enhanced Tournament Display Labels */
+        .tournament-display-label {
+            position: absolute;
+            top: var(--spacing-md);
+            right: var(--spacing-md);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--radius-md);
+            font-size: var(--text-xs);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            z-index: 3;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .label-main {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--chart-4) 100%);
+            color: white;
+        }
+
+        .label-hot {
+            background: linear-gradient(135deg, var(--destructive) 0%, var(--neon-pink) 100%);
+            color: white;
+        }
+
+        .label-rising {
+            background: linear-gradient(135deg, var(--neon-green) 0%, var(--chart-1) 100%);
+            color: white;
+        }
+
+        /* Enhanced Animations */
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .sub-tournaments-row {
+                grid-template-columns: 1fr;
+                gap: var(--spacing-md);
+            }
+            
+            .main-tournament-display {
+                padding: var(--spacing-xl);
+            }
+            
+            .sub-tournament-display {
+                padding: var(--spacing-lg);
+            }
+            
+            .tournament-quick-stats {
+                flex-direction: column;
+                gap: var(--spacing-sm);
+            }
+        }
+
+        /* Additional Engagement Effects */
+        .tournament-card-title {
+            transition: all 0.3s ease;
+        }
+
+        .main-tournament-display:hover .tournament-title,
+        .sub-tournament-display:hover .tournament-card-title {
+            transform: translateX(4px);
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        .tournament-stats .tournament-stat {
+            transition: all 0.3s ease;
+        }
+
+        .main-tournament-display:hover .tournament-stat,
+        .sub-tournament-display:hover .quick-stat-item {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+    </style>
+</head>
+<body>
+    <!-- Compact Professional Header -->
+    <header class="header">
+        <div class="header-content">
+            <a href="#" class="logo">PolyCentral</a>
+            
+            <nav class="main-nav">
+                <a href="#" class="nav-link active">Home</a>
+                <a href="#" class="nav-link">Tournaments</a>
+                <a href="#" class="nav-link">Leaderboards</a>
+                <a href="#" class="nav-link">Learn</a>
+            </nav>
+            
+            <div class="user-section" id="user-section" style="display: none;">
+                <div class="user-points" id="user-points">2,500 pts</div>
+                <div class="user-avatar" onclick="toggleUserDropdown()">U</div>
+            </div>
+            
+            <button class="btn-claim-daily" id="connect-btn" onclick="connectWallet()">Connect Wallet</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Daily Challenge - Compact and Enticing -->
+<!-- Gaming Daily Challenge v3 -->
+<section class="daily-challenge-section">
+  <div class="challenge-wrapper">
+    <div class="daily-challenge-card">
+
+      <!-- animated top bar -->
+      <div class="challenge-bar">
+        <span class="flare"></span>
+        <span class="bar-text">FREE DAILY CHALLENGE</span>
+        <span class="flare"></span>
+      </div>
+
+      <!-- title & subtitle -->
+      <h2 class="challenge-title">PREDICT • EARN • CLIMB</h2>
+      <p class="challenge-subtitle">
+        Call today's Bitcoin close &nbsp;•&nbsp; Win <span class="coin">500</span> coins
+      </p>
+
+      <!-- prediction question (big) -->
+      <div class="prediction-question">
+        Will Bitcoin close above <strong>$97 000</strong> today ?
+      </div>
+
+      <!-- streak badges -->
+      <div class="streak-info">
+        <div class="streak-badge">
+          <span class="fire">🔥</span>
+          <span>5-Day Streak</span>
+        </div>
+        <div class="streak-badge bonus">
+          <span class="plus">+100</span>
+          <span>Bonus tomorrow</span>
+        </div>
+      </div>
+
+      <!-- CLAIM BUTTON (coin style) -->
+      <button class="btn-claim-daily coin-button">
+        <span class="coin-icon">🪙</span>
+        <span class="btn-text">Claim Free 500</span>
+        <span class="coin-icon">🪙</span>
+      </button>
+
+    </div>
+  </div>
+</section>
+
+        <!-- Performance Dashboard -->
+        <section class="stats-dashboard orange-card">
+            <h3 class="stats-header">Your Performance Dashboard</h3>
+            <div class="stats-grid">
+                <div class="stat-item orange-card" onclick="showPointsHistory()">
+                    <div class="stat-icon points">💰</div>
+                    <div class="stat-content">
+                        <span class="stat-value" id="points-balance">3,347</span>
+                        <span class="stat-label">Points Balance</span>
+                        <span class="stat-change">+500 Today ↗</span>
+                    </div>
+                </div>
+                
+                <div class="stat-item orange-card">
+                    <div class="stat-icon accuracy">📊</div>
+                    <div class="stat-content">
+                        <span class="stat-value" id="accuracy-rate">67%</span>
+                        <span class="stat-label">Accuracy</span>
+                        <span class="stat-change">+5% This Week ↗</span>
+                    </div>
+                </div>
+                
+                <div class="stat-item orange-card" onclick="openLeaderboard()">
+                    <div class="stat-icon rank">🏆</div>
+                    <div class="stat-content">
+                        <span class="stat-value" id="global-rank">#46</span>
+                        <span class="stat-label">Global Rank</span>
+                        <span class="stat-change" style="color: var(--primary); cursor: pointer;">View Leaderboard →</span>
+                    </div>
+                </div>
+                
+                <div class="stat-item orange-card">
+                    <div class="stat-icon streak">🔥</div>
+                    <div class="stat-content">
+                        <span class="stat-value" id="current-streak">5 Days</span>
+                        <span class="stat-label">Current Streak</span>
+                        <span class="stat-change">Next: +100 Bonus</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA Banner -->
+        <section class="cta-banner" id="upgrade-cta">
+            <h3 class="cta-title">Turn Your Points Into Real ETH</h3>
+            <p class="cta-subtitle">You've earned 500 points today. Use them to compete in tournaments with prize pools.</p>
+            <button class="btn-explore-tournaments" onclick="scrollToTournaments()">
+                Explore Tournaments
+            </button>
+        </section>
+
+        <!-- Featured Tournaments - New Structure -->
+<!-- Tournaments Section -->
+<section class="tournaments-section">
+  <div class="section-header">
+    <h2 class="section-title">FEATURED TOURNAMENTS</h2>
+  </div>
+  
+  <div class="tournament-display-grid">
+    <div class="main-tournament-row">
+      <div class="main-tournament-display orange-card">
+        <span class="tournament-display-label label-main">Featured</span>
+        
+        <div class="tournament-header">
+          <div>
+            <h3 class="tournament-title">OFFICIAL DEFI CHAMPIONSHIP</h3>
+            <p class="tournament-subtitle">Sponsored by Rejectorial Foundation</p>
+            <span class="category-badge crypto-badge">CRYPTO</span>
+          </div>
+          
+          <div class="prize-pool">
+            <span class="prize-amount">5.75 ETH</span>
+            <span class="prize-usd">~$16,240</span>
+          </div>
+        </div>
+        
+        <div class="tournament-stats">
+          <div class="tournament-stat">
+            <span class="tournament-stat-value">156/200</span>
+            <span class="tournament-stat-label">PARTICIPANTS</span>
+          </div>
+          <div class="tournament-stat">
+            <span class="tournament-stat-value">02:34:18</span>
+            <span class="tournament-stat-label">STARTS IN</span>
+          </div>
+        </div>
+        
+        <div class="tournament-actions">
+          <button class="btn-enter-tournament">Enter Main Tournament</button>
+          <button class="btn-view-leaderboard">View Details</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="sub-tournaments-row">
+      <div class="sub-tournament-display hot orange-card">
+        <span class="tournament-display-label label-hot">Hot</span>
+        
+        <h4 class="tournament-card-title">HOT TOURNAMENT</h4>
+        <p class="tournament-subtitle">Trending predictions with high engagement</p>
+        
+        <div class="tournament-quick-stats">
+          <div class="quick-stat-item">
+            <span class="stat-number">3</span>
+            <span class="stat-text">ACTIVE</span>
+          </div>
+          <div class="quick-stat-item">
+            <span class="stat-number">5.3 ETH</span>
+            <span class="stat-text">TOTAL PRIZES</span>
+          </div>
+        </div>
+        
+        <button class="btn-view-leaderboard">View Hot Tournaments</button>
+      </div>
+      
+      <div class="sub-tournament-display rising orange-card">
+        <span class="tournament-display-label label-rising">Rising</span>
+        
+        <h4 class="tournament-card-title">RISING TOURNAMENT</h4>
+        <p class="tournament-subtitle">New tournaments with growing prize pools</p>
+        
+        <div class="tournament-quick-stats">
+          <div class="quick-stat-item">
+            <span class="stat-number">2</span>
+            <span class="stat-text">GROWING</span>
+          </div>
+          <div class="quick-stat-item">
+            <span class="stat-number">2.1 ETH</span>
+            <span class="stat-text">TOTAL PRIZES</span>
+          </div>
+        </div>
+        
+        <button class="btn-view-leaderboard">View Rising Tournaments</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+        <!-- Filter Bar -->
+        <div class="category-filter-bar">
+          <button class="category-filter-btn all active" onclick="filterTournaments('all')">All</button>
+          <button class="category-filter-btn crypto" onclick="filterTournaments('crypto')">Crypto</button>
+          <button class="category-filter-btn stocks" onclick="filterTournaments('stocks')">Stocks</button>
+          <button class="category-filter-btn politics" onclick="filterTournaments('politics')">Politics</button>
+        </div>
+
+        <!-- Live Rankings Widget -->
+        <section class="live-rankings orange-card">
+            <div class="rankings-header">
+                <h3 class="rankings-title">Live Leaderboard Snapshot</h3>
+                <span class="your-rank">Your Rank: #46</span>
+            </div>
+            
+            <div class="rankings-table">
+                <div class="ranking-item">
+                    <span class="rank-number">1</span>
+                    <span class="player-name">CryptoProphet</span>
+                    <span class="player-points">15,420 pts</span>
+                </div>
+                <div class="ranking-item">
+                    <span class="rank-number">2</span>
+                    <span class="player-name">MarketMaster</span>
+                    <span class="player-points">12,350 pts</span>
+                </div>
+                <div class="ranking-item">
+                    <span class="rank-number">3</span>
+                    <span class="player-name">PredictionKing</span>
+                    <span class="player-points">9,870 pts</span>
+                </div>
+            </div>
+            
+            <div class="user-stats-summary">
+                <div class="summary-stat">
+                    <div class="summary-value">1.42 ETH</div>
+                    <div class="summary-label">Total Won</div>
+                </div>
+                <div class="summary-stat">
+                    <div class="summary-value">67%</div>
+                    <div class="summary-label">Accuracy</div>
+                </div>
+                <div class="summary-stat">
+                    <div class="summary-value">18</div>
+                    <div class="summary-label">Predictions</div>
+                </div>
+            </div>
+            
+            <button class="btn-view-leaderboard" onclick="openFullLeaderboard()">
+                View Full Leaderboard →
+            </button>
+        </section>
+    </div>
+
+
+    <!-- User Dropdown -->
+    <div id="user-dropdown" class="user-dropdown" style="display: none;">
+        <div class="dropdown-content">
+            <div class="dropdown-item">
+                <strong>Username:</strong> <span id="dropdown-username">CryptoTrader123</span>
+            </div>
+            <div class="dropdown-item">
+                <strong>Email:</strong> <span id="dropdown-email">user@example.com</span>
+            </div>
+            <div class="dropdown-item">
+                <strong>Points:</strong> <span id="dropdown-points">3,347</span>
+            </div>
+            <div class="dropdown-item">
+                <strong>Rank:</strong> <span id="dropdown-rank">#46</span>
+            </div>
+            <hr style="margin: 10px 0; border-color: var(--glass-border);">
+            <div class="dropdown-item" style="cursor: pointer;">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </div>
+        </div>
+    </div>
+
+    <!-- Load external scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
