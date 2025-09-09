@@ -285,10 +285,10 @@ app.post('/api/auth/register', async (req, res) => {
         // Add password validation for email registrations
         if (email && password) {
             // Password validation: min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character
-            const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+            const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!\-%*?&])[A-Za-z\d@$!\-%*?&]{8,}$/;
             if (!passwordRegex.test(password)) {
                 console.log('❌ Invalid password format');
-                return res.status(400).json({ error: 'Invalid password' });
+                return res.status(400).json({ error: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&-)' });
             }
         }
 
