@@ -282,11 +282,25 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: 'Username required' });
         }
 
+        // Add password validation for email registrations
+        if (email && password) {
+            // Password validation: min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character
+            const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+            if (!passwordRegex.test(password)) {
+                console.log('❌ Invalid password format');
+                return res.status(400).json({ error: 'Invalid password' });
+            }
+        }
+
         console.log('✅ Validation passed, creating user...');
 
-        // Simplified insert (skip password for now)
-        db.run('INSERT INTO users (email, username, points) VALUES (?, ?, 1000)',
-            [email || null, username], function(err) {
+        let password_hash = null;
+        if (email && password) {
+            password_hash = await bcrypt.hash(password, 10);
+        }
+
+        db.run('INSERT INTO users (email, username, password_hash, points) VALUES (?, ?, ?, 1000)',
+            [email || null, username, password_hash], function(err) {
             if (err) {
                 console.error('❌ Database error:', err);
                 if (err.code === 'SQLITE_CONSTRAINT') {
@@ -297,12 +311,12 @@ app.post('/api/auth/register', async (req, res) => {
 
             console.log('✅ User created:', this.lastID);
             const token = jwt.sign(
-                { userId: this.lastID }, 
+                { userId: this.lastID },
                 'mvp-secret-key',
                 { expiresIn: '7d' }
             );
 
-            res.json({
+            res.status(201).json({
                 token,
                 user: {
                     id: this.lastID,
@@ -320,21 +334,29 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // User Login - Updated to handle wallet-only login attempts
-// User Login - Fixed version
+// User Login - Updated to support username or email
 app.post('/api/auth/login', async (req, res) => {
     console.log('🔐 Login attempt:', req.body);
-    const { email, wallet_address, password } = req.body;
+    const { identifier, wallet_address, password } = req.body;
+    const useWallet = wallet_address && !identifier;
 
-    if (!email && !wallet_address) {
-        return res.status(400).json({ error: 'Email or wallet address required' });
+    if (!identifier && !wallet_address) {
+        return res.status(400).json({ error: 'Identifier (username/email) or wallet address required' });
     }
 
-    const query = email ?
-        'SELECT * FROM users WHERE email = ?' :
-        'SELECT * FROM users WHERE wallet_address = ?';
-    const param = email || wallet_address;
+    let query;
+    let param;
 
-    db.get(query, [param], async (err, user) => {
+    if (useWallet) {
+        query = 'SELECT * FROM users WHERE wallet_address = ?';
+        param = wallet_address;
+    } else {
+        // Check both username and email fields for identifier
+        query = 'SELECT * FROM users WHERE username = ? OR email = ?';
+        param = identifier;
+    }
+
+    db.get(query, useWallet ? [param] : [param, param], async (err, user) => {
         if (err) {
             console.error('Database error:', err);
             return res.status(500).json({ error: 'Database error' });
@@ -345,8 +367,13 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // If user has password, check it
-        if (user.password_hash && password) {
+        // For non-wallet logins, require password validation
+        if (!useWallet) {
+            if (!user.password_hash) {
+                console.log('❌ Password not set for user');
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+            
             const validPassword = await bcrypt.compare(password, user.password_hash);
             if (!validPassword) {
                 return res.status(401).json({ error: 'Invalid password' });
@@ -359,7 +386,7 @@ app.post('/api/auth/login', async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        console.log(`✅ User logged in: ${user.username || user.email}`);
+        console.log(`✅ User logged in: ${user.username || user.email || user.wallet_address}`);
         res.json({ token, user: { ...user, password_hash: undefined } });
     });
 });
