@@ -251,7 +251,11 @@ const authenticateToken = (req, res, next) => {
 
     jwt.verify(token, process.env.JWT_SECRET || 'mvp-secret-key', (err, user) => {
         if (err) {
-            return res.status(403).json({ error: 'Invalid or expired token' });
+            console.error('❌ Token verification error:', err.name);
+            if (err.name === 'TokenExpiredError') {
+                return res.status(401).json({ error: 'Token expired' });
+            }
+            return res.status(403).json({ error: 'Invalid token' });
         }
         req.userId = user.userId;
         next();
@@ -391,6 +395,30 @@ app.post('/api/auth/login', async (req, res) => {
     });
 });
 
+// Token Refresh
+app.post('/api/auth/refresh', (req, res) => {
+    const refreshToken = req.body.refreshToken;
+    if (!refreshToken) {
+        return res.status(401).json({ error: 'Refresh token required' });
+    }
+
+    jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, user) => {
+        if (err) {
+            console.error('❌ Refresh token verification error:', err);
+            return res.status(403).json({ error: 'Invalid refresh token' });
+        }
+        
+        // Generate new access token
+        const accessToken = jwt.sign(
+            { userId: user.userId },
+            process.env.JWT_SECRET,
+            { expiresIn: '15m' }
+        );
+        
+        res.json({ token: accessToken });
+    });
+});
+
 // Get Active Tournaments
 app.get('/api/tournaments', (req, res) => {
     console.log('🏆 Fetching tournaments...');
@@ -521,6 +549,28 @@ app.get('/api/user/stats', authenticateToken, (req, res) => {
 
         res.json(userStats);
     });
+});
+
+// Claim Free Points
+app.post('/api/user/claim-free-points', authenticateToken, (req, res) => {
+    const userId = req.userId;
+    const pointsToAdd = 500; // Daily free points amount
+    
+    db.run('UPDATE users SET points = points + ? WHERE id = ?',
+        [pointsToAdd, userId], function(err) {
+            if (err) {
+                console.error('❌ Points claim error:', err);
+                return res.status(500).json({ error: 'Failed to claim points' });
+            }
+            
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            console.log(`✅ User ${userId} claimed ${pointsToAdd} free points`);
+            res.json({ success: true, points: pointsToAdd });
+        }
+    );
 });
 
 // Admin Routes (for manual tournament management)
