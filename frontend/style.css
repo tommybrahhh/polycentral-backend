@@ -1034,3 +1034,67 @@ section{margin-bottom:var(--space);}
 .daily-challenge-section .flare {
   display: none !important;
 }
+
+/* Password validation styles */
+#password-strength {
+    margin: 5px 0;
+}
+
+#password-strength div {
+    transition: color 0.3s ease;
+}
+
+#password-match {
+    color: #ff6f00;
+    font-size: 12px;
+    margin-top: 5px;
+    display: none;
+}
+
+/* Success notification styles */
+.success-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(30, 30, 30, 0.95);
+    border: 2px solid #A5FF90;
+    border-radius: 12px;
+    padding: 15px 25px;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 0 20px rgba(165, 255, 144, 0.3);
+    animation: slideIn 0.5s ease, fadeOut 0.5s ease 3s forwards;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+.success-notification-icon {
+    font-size: 24px;
+    color: #A5FF90;
+}
+
+.success-notification-content h3 {
+    margin: 0 0 5px 0;
+    color: #A5FF90;
+}
+
+.success-notification-content p {
+    margin: 0;
+    color: #ccc;
+    font-size: 14px;
+}
+
+/* Login/Register form updates */
+#login-input {
+    margin-bottom: 15px;
+}

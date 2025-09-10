@@ -17,14 +17,8 @@ const PORT = process.env.PORT || 3001;
 // Security middleware
 app.use(helmet());
 // Configure CORS dynamically based on environment
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',')
-  : [
-      'http://localhost:3000',
-      'http://127.0.0.1:5500',
-      'http://localhost:5500',
-      'https://polycentral-frontend.vercel.app'
-    ];
+const raw = process.env.CORS_ORIGIN || '';
+const allowedOrigins = raw.split(',').map(o => o.trim()).filter(Boolean);
 
 app.use(cors({
     origin: function (origin, callback) {
@@ -82,6 +76,12 @@ const db = new sqlite3.Database('./predictions.db', (err) => {
         db.run('PRAGMA synchronous = NORMAL');
     }
 });
+
+// helper: make sure options is always an array
+function fmt(t) {
+if (t.options && typeof t.options === 'string') t.options = JSON.parse(t.options);
+return t;
+}
 
 // Create tables if they don't exist
 db.serialize(() => {
@@ -251,7 +251,11 @@ const authenticateToken = (req, res, next) => {
 
     jwt.verify(token, process.env.JWT_SECRET || 'mvp-secret-key', (err, user) => {
         if (err) {
-            return res.status(403).json({ error: 'Invalid or expired token' });
+            console.error('❌ Token verification error:', err.name);
+            if (err.name === 'TokenExpiredError') {
+                return res.status(401).json({ error: 'Token expired' });
+            }
+            return res.status(403).json({ error: 'Invalid token' });
         }
         req.userId = user.userId;
         next();
@@ -282,11 +286,25 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: 'Username required' });
         }
 
+        // Add password validation for email registrations
+        if (email && password) {
+            // Password validation: min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character
+            const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!\-%*?&])[A-Za-z\d@$!\-%*?&]{8,}$/;
+            if (!passwordRegex.test(password)) {
+                console.log('❌ Invalid password format');
+                return res.status(400).json({ error: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&-)' });
+            }
+        }
+
         console.log('✅ Validation passed, creating user...');
 
-        // Simplified insert (skip password for now)
-        db.run('INSERT INTO users (email, username, points) VALUES (?, ?, 1000)',
-            [email || null, username], function(err) {
+        let password_hash = null;
+        if (email && password) {
+            password_hash = await bcrypt.hash(password, 10);
+        }
+
+        db.run('INSERT INTO users (email, username, password_hash, points) VALUES (?, ?, ?, 1000)',
+            [email || null, username, password_hash], function(err) {
             if (err) {
                 console.error('❌ Database error:', err);
                 if (err.code === 'SQLITE_CONSTRAINT') {
@@ -297,12 +315,12 @@ app.post('/api/auth/register', async (req, res) => {
 
             console.log('✅ User created:', this.lastID);
             const token = jwt.sign(
-                { userId: this.lastID }, 
+                { userId: this.lastID },
                 'mvp-secret-key',
                 { expiresIn: '7d' }
             );
 
-            res.json({
+            res.status(201).json({
                 token,
                 user: {
                     id: this.lastID,
@@ -320,21 +338,29 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // User Login - Updated to handle wallet-only login attempts
-// User Login - Fixed version
+// User Login - Updated to support username or email
 app.post('/api/auth/login', async (req, res) => {
     console.log('🔐 Login attempt:', req.body);
-    const { email, wallet_address, password } = req.body;
+    const { identifier, wallet_address, password } = req.body;
+    const useWallet = wallet_address && !identifier;
 
-    if (!email && !wallet_address) {
-        return res.status(400).json({ error: 'Email or wallet address required' });
+    if (!identifier && !wallet_address) {
+        return res.status(400).json({ error: 'Identifier (username/email) or wallet address required' });
     }
 
-    const query = email ?
-        'SELECT * FROM users WHERE email = ?' :
-        'SELECT * FROM users WHERE wallet_address = ?';
-    const param = email || wallet_address;
+    let query;
+    let param;
 
-    db.get(query, [param], async (err, user) => {
+    if (useWallet) {
+        query = 'SELECT * FROM users WHERE wallet_address = ?';
+        param = wallet_address;
+    } else {
+        // Check both username and email fields for identifier
+        query = 'SELECT * FROM users WHERE username = ? OR email = ?';
+        param = identifier;
+    }
+
+    db.get(query, useWallet ? [param] : [param, param], async (err, user) => {
         if (err) {
             console.error('Database error:', err);
             return res.status(500).json({ error: 'Database error' });
@@ -345,8 +371,13 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // If user has password, check it
-        if (user.password_hash && password) {
+        // For non-wallet logins, require password validation
+        if (!useWallet) {
+            if (!user.password_hash) {
+                console.log('❌ Password not set for user');
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+            
             const validPassword = await bcrypt.compare(password, user.password_hash);
             if (!validPassword) {
                 return res.status(401).json({ error: 'Invalid password' });
@@ -359,8 +390,32 @@ app.post('/api/auth/login', async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        console.log(`✅ User logged in: ${user.username || user.email}`);
+        console.log(`✅ User logged in: ${user.username || user.email || user.wallet_address}`);
         res.json({ token, user: { ...user, password_hash: undefined } });
+    });
+});
+
+// Token Refresh
+app.post('/api/auth/refresh', (req, res) => {
+    const refreshToken = req.body.refreshToken;
+    if (!refreshToken) {
+        return res.status(401).json({ error: 'Refresh token required' });
+    }
+
+    jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, user) => {
+        if (err) {
+            console.error('❌ Refresh token verification error:', err);
+            return res.status(403).json({ error: 'Invalid refresh token' });
+        }
+        
+        // Generate new access token
+        const accessToken = jwt.sign(
+            { userId: user.userId },
+            process.env.JWT_SECRET,
+            { expiresIn: '15m' }
+        );
+        
+        res.json({ token: accessToken });
     });
 });
 
@@ -385,10 +440,7 @@ app.get('/api/tournaments', (req, res) => {
             return res.status(500).json({ error: 'Failed to fetch tournaments' });
         }
 
-        const formattedTournaments = tournaments.map(t => ({
-            ...t,
-            options: JSON.parse(t.options)
-        }));
+        const formattedTournaments = tournaments.map(fmt);
 
         console.log(`✅ Returning ${formattedTournaments.length} tournaments`);
         res.json(formattedTournaments);
@@ -499,6 +551,28 @@ app.get('/api/user/stats', authenticateToken, (req, res) => {
     });
 });
 
+// Claim Free Points
+app.post('/api/user/claim-free-points', authenticateToken, (req, res) => {
+    const userId = req.userId;
+    const pointsToAdd = 500; // Daily free points amount
+    
+    db.run('UPDATE users SET points = points + ? WHERE id = ?',
+        [pointsToAdd, userId], function(err) {
+            if (err) {
+                console.error('❌ Points claim error:', err);
+                return res.status(500).json({ error: 'Failed to claim points' });
+            }
+            
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            console.log(`✅ User ${userId} claimed ${pointsToAdd} free points`);
+            res.json({ success: true, points: pointsToAdd });
+        }
+    );
+});
+
 // Admin Routes (for manual tournament management)
 
 // Start Tournament
@@ -553,6 +627,8 @@ app.post('/api/admin/tournaments/:id/resolve', (req, res) => {
                     console.log(`🏁 Tournament ${tournamentId} resolved, no winners`);
                     return res.json({ success: true, message: 'Tournament resolved, no winners' });
                 }
+
+                winners.forEach(w => fmt(w));
 
                 // Distribute prizes
                 const prizePerWinner = Math.floor(winners[0].prize_pool / winners.length);

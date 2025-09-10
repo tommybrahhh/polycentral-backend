@@ -1,7 +1,7 @@
 // API Configuration
 const API_BASE_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:3001/api' 
-    : 'https://your-app-name.up.railway.app/api';
+    : 'https://polycentral-backend.onrender.com/api';
     
 // Global State
 let currentUser = null;
@@ -250,12 +250,14 @@ function showEmailLoginModal() {
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 400px;">
             <div class="modal-header">
-                <h3>Email Authentication</h3>
+                <h3>Login</h3>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="email-auth-form">
-                    <input type="email" id="email-input" placeholder="Enter your email" required 
+                    <input type="text" id="login-input" placeholder="Username or Email" required
+                           style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;">
+                    <input type="password" id="password-input" placeholder="Password" required
                            style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;">
                     <div style="display: flex; gap: 10px; margin-top: 20px;">
                         <button type="button" id="login-btn" class="btn-claim-daily" style="flex: 1;">Login</button>
@@ -274,15 +276,16 @@ function showEmailLoginModal() {
     // Add event listener for login button
     document.getElementById('login-btn').onclick = async (e) => {
         e.preventDefault();
-        const email = document.getElementById('email-input').value;
+        const identifier = document.getElementById('login-input').value;
+        const password = document.getElementById('password-input').value;
         
-        if (!email) {
-            alert('Please enter your email');
+        if (!identifier || !password) {
+            alert('Please fill in all fields');
             return;
         }
         
         try {
-            await loginUser({ email });
+            await loginUser({ identifier, password });
             closeModal();
         } catch (error) {
             alert('Login failed: ' + error.message);
@@ -294,12 +297,28 @@ function showEmailLoginModal() {
 window.switchToRegister = function() {
     const form = document.getElementById('email-auth-form');
     form.innerHTML = `
-        <input type="email" id="email-input" placeholder="Enter your email" required 
+        <input type="email" id="email-input" placeholder="Enter your email" required
                style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;">
         <input type="text" id="username-input" placeholder="Choose username" required
                style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;">
+        <input type="password" id="password-input" placeholder="Password" required
+               style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;"
+               oninput="validatePassword()">
+        <div id="password-strength" style="font-size: 12px; margin: 0 0 10px 0;">
+            <div id="length" style="color: #ff6f00;">• 8+ characters</div>
+            <div id="upper" style="color: #ff6f00;">• Uppercase letter</div>
+            <div id="lower" style="color: #ff6f00;">• Lowercase letter</div>
+            <div id="digit" style="color: #ff6f00;">• Digit</div>
+            <div id="special" style="color: #ff6f00;">• Special character</div>
+        </div>
+        <input type="password" id="confirm-password-input" placeholder="Confirm Password" required
+               style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;"
+               oninput="validatePassword()">
+        <div id="password-match" style="font-size: 12px; color: #ff6f00; margin-bottom: 10px; display: none;">
+            Passwords must match
+        </div>
         <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button type="button" id="register-btn" class="btn-claim-daily" style="flex: 1;">Register</button>
+            <button type="button" id="register-btn" class="btn-claim-daily" style="flex: 1;" disabled>Register</button>
             <button type="button" onclick="closeModal()" class="btn-secondary" style="flex: 1; background: #666;">Cancel</button>
         </div>
     `;
@@ -308,14 +327,21 @@ window.switchToRegister = function() {
         e.preventDefault();
         const email = document.getElementById('email-input').value;
         const username = document.getElementById('username-input').value;
+        const password = document.getElementById('password-input').value;
+        const confirmPassword = document.getElementById('confirm-password-input').value;
         
-        if (!email || !username) {
+        if (!email || !username || !password || !confirmPassword) {
             alert('Please fill in all fields');
             return;
         }
         
+        if (password !== confirmPassword) {
+            alert('Passwords do not match');
+            return;
+        }
+        
         try {
-            await registerUser({ email, username });
+            await registerUser({ email, username, password });
             closeModal();
         } catch (error) {
             alert('Registration failed: ' + error.message);
@@ -377,10 +403,92 @@ async function registerUser(userData) {
         
         console.log('User registered:', currentUser.username || currentUser.email);
         updateUserInterface();
+        loadTournaments();
+        
+        // Show success notification
+        showSuccessNotification();
         
     } catch (error) {
         console.error('Registration error:', error);
         throw error;
+    }
+}
+
+// Show success notification after registration
+function showSuccessNotification() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.position = 'fixed';
+    modal.style.top = '0';
+    modal.style.left = '0';
+    modal.style.width = '100%';
+    modal.style.height = '100%';
+    modal.style.background = 'rgba(0, 0, 0, 0.8)';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.zIndex = '1000';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div class="modal-header">
+                <h3>Registration Successful!</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="font-size: 48px; color: #A5FF90; margin: 20px 0;">✓</div>
+                <p>Your account has been created successfully.</p>
+                <p>You can now log in to start playing.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-claim-daily" onclick="closeModal()" style="margin: 0 auto;">
+                    Continue
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+// Password validation logic
+window.validatePassword = function() {
+    const password = document.getElementById('password-input')?.value || '';
+    const confirmPassword = document.getElementById('confirm-password-input')?.value || '';
+    const registerBtn = document.getElementById('register-btn');
+    const matchError = document.getElementById('password-match');
+    const strengthDiv = document.getElementById('password-strength');
+    
+    if (!strengthDiv) return;
+    
+    // Password strength criteria
+    const hasMinLength = password.length >= 8;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasDigit = /\d/.test(password);
+    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    const passwordsMatch = password === confirmPassword;
+    
+    // Update strength indicators
+    document.getElementById('length').style.color = hasMinLength ? '#A5FF90' : '#ff6f00';
+    document.getElementById('upper').style.color = hasUpperCase ? '#A5FF90' : '#ff6f00';
+    document.getElementById('lower').style.color = hasLowerCase ? '#A5FF90' : '#ff6f00';
+    document.getElementById('digit').style.color = hasDigit ? '#A5FF90' : '#ff6f00';
+    document.getElementById('special').style.color = hasSpecial ? '#A5FF90' : '#ff6f00';
+    
+    // Update match indicator
+    if (matchError) {
+        if (confirmPassword && !passwordsMatch) {
+            matchError.style.display = 'block';
+        } else {
+            matchError.style.display = 'none';
+        }
+    }
+    
+    // Enable/disable register button
+    if (registerBtn) {
+        const isValid = hasMinLength && hasUpperCase && hasLowerCase && hasDigit && hasSpecial && passwordsMatch;
+        registerBtn.disabled = !isValid;
     }
 }
 
@@ -402,12 +510,28 @@ async function loginUser(credentials) {
         
         console.log('User logged in:', currentUser.username || currentUser.email);
         updateUserInterface();
+        loadTournaments();
         
     } catch (error) {
         console.error('Login error:', error);
         throw error;
     }
 }
+
+// Initialize password validation on load
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listeners for any existing password fields
+    const passwordInput = document.getElementById('password-input');
+    const confirmPasswordInput = document.getElementById('confirm-password-input');
+    
+    if (passwordInput) {
+        passwordInput.addEventListener('input', validatePassword);
+    }
+    
+    if (confirmPasswordInput) {
+        confirmPasswordInput.addEventListener('input', validatePassword);
+    }
+});
 
 // Load user data from backend
 async function loadUserData() {
@@ -429,6 +553,20 @@ async function loadUserData() {
         console.error('Failed to load user data:', error);
     }
 }
+
+// Filter tournaments by category
+window.filterTournaments = function(category) {
+    // Update active button state
+    document.querySelectorAll('.category-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.classList.contains(category)) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Load tournaments with filter
+    loadTournaments(category);
+};
 
 // Filter tournaments by category
 window.filterTournaments = function(category) {
