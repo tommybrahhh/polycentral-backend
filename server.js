@@ -251,7 +251,13 @@ const authenticateToken = (req, res, next) => {
 
     jwt.verify(token, process.env.JWT_SECRET || 'mvp-secret-key', (err, user) => {
         if (err) {
-            console.error('❌ Token verification error:', err.name);
+            console.error('❌ Token verification error:', {
+                name: err.name,
+                message: err.message,
+                token: token,  // Log the problematic token for debugging
+                timestamp: new Date().toISOString()
+            });
+            
             if (err.name === 'TokenExpiredError') {
                 return res.status(401).json({ error: 'Token expired' });
             }
