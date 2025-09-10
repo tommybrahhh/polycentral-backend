@@ -102,6 +102,17 @@ db.serialize(() => {
         else console.log('✅ Users table ready');
     });
 
+    // migrate: add last_claim_date if not exists
+    db.run(`ALTER TABLE users ADD COLUMN last_claim_date DATETIME`, (err) => {
+      if (err && err.message.includes('duplicate column name')) {
+        // column already exists – ignore
+      } else if (err) {
+        console.error('❌ Migration error:', err);
+      } else {
+        console.log('✅ Column last_claim_date added');
+      }
+    });
+
     // Tournaments table
     db.run(`CREATE TABLE IF NOT EXISTS tournaments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
