@@ -545,13 +545,20 @@ app.get('/api/user/stats', authenticateToken, (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        const accuracy = user.total_tournaments > 0 ? 
+        const accuracy = user.total_tournaments > 0 ?
             Math.round((user.won_tournaments / user.total_tournaments) * 100) : 0;
+        
+        // Calculate time until next claim
+        const lastClaim = user.last_claim_date ? new Date(user.last_claim_date) : null;
+        const nextClaimAvailable = lastClaim ?
+            new Date(lastClaim.getTime() + (24 * 60 * 60 * 1000)) :
+            new Date();
 
         const userStats = {
             ...user,
-            password_hash: undefined, // Don't send password hash
-            accuracy
+            password_hash: undefined,
+            accuracy,
+            next_claim_available: nextClaimAvailable.toISOString()
         };
 
         res.json(userStats);
@@ -561,23 +568,53 @@ app.get('/api/user/stats', authenticateToken, (req, res) => {
 // Claim Free Points
 app.post('/api/user/claim-free-points', authenticateToken, (req, res) => {
     const userId = req.userId;
-    const pointsToAdd = 500; // Daily free points amount
-    
-    db.run('UPDATE users SET points = points + ? WHERE id = ?',
-        [pointsToAdd, userId], function(err) {
-            if (err) {
-                console.error('❌ Points claim error:', err);
-                return res.status(500).json({ error: 'Failed to claim points' });
-            }
-            
-            if (this.changes === 0) {
-                return res.status(404).json({ error: 'User not found' });
-            }
-            
-            console.log(`✅ User ${userId} claimed ${pointsToAdd} free points`);
-            res.json({ success: true, points: pointsToAdd });
+    const pointsToAdd = 500;
+    const cooldownHours = 24;
+
+    db.get('SELECT last_claim_date FROM users WHERE id = ?', [userId], (err, user) => {
+        if (err) {
+            console.error('❌ Database error:', err);
+            return res.status(500).json({ error: 'Database error' });
         }
-    );
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const now = new Date();
+        const lastClaim = user.last_claim_date ? new Date(user.last_claim_date) : null;
+        
+        if (lastClaim) {
+            const hoursSinceClaim = Math.abs(now - lastClaim) / 36e5;
+            if (hoursSinceClaim < cooldownHours) {
+                const remainingHours = (cooldownHours - hoursSinceClaim).toFixed(1);
+                return res.status(429).json({
+                    error: `Cooldown active`,
+                    details: `Wait ${remainingHours} hours before claiming again`,
+                    next_claim_available: new Date(lastClaim.getTime() + (cooldownHours * 60 * 60 * 1000))
+                });
+            }
+        }
+
+        db.run(`UPDATE users
+                SET points = points + ?,
+                    last_claim_date = CURRENT_TIMESTAMP
+                WHERE id = ?`,
+            [pointsToAdd, userId], function(err) {
+                if (err) {
+                    console.error('❌ Points claim error:', err);
+                    return res.status(500).json({ error: 'Failed to claim points' });
+                }
+                
+                console.log(`✅ User ${userId} claimed ${pointsToAdd} free points`);
+                res.json({
+                    success: true,
+                    points: pointsToAdd,
+                    next_claim_available: new Date(now.getTime() + (cooldownHours * 60 * 60 * 1000))
+                });
+            }
+        );
+    });
 });
 
 // Admin Routes (for manual tournament management)
