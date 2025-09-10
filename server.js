@@ -12,6 +12,7 @@ const cron = require('node-cron');
 require('dotenv').config();
 const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
 // Security middleware
