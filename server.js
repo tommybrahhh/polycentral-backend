@@ -323,7 +323,7 @@ app.post('/api/auth/register', async (req, res) => {
             console.log('✅ User created:', this.lastID);
             const token = jwt.sign(
                 { userId: this.lastID },
-                'mvp-secret-key',
+                process.env.JWT_SECRET,
                 { expiresIn: '7d' }
             );
 
