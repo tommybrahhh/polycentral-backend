@@ -257,7 +257,7 @@ async function createTestUsers() {
         if (result) {
             console.log('✅ Created test user:', user.username);
         }
-    });
+    };
 }
 
 // Authentication middleware
@@ -388,7 +388,7 @@ app.post('/api/auth/login', async (req, res) => {
         const { rows: [user] } = await pool.query(query, params);
 
         if (!user) {
-            console.log('❌ User not found:', param);
+            console.log('❌ User not found:', params[0]);
             return res.status(404).json({ error: 'User not found' });
         }
 
@@ -411,8 +411,7 @@ app.post('/api/auth/login', async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        console.log('✅ User logged in:',
-            user.username || user.email || user.wallet_address);
+        console.log('✅ User logged in:', user.username || user.email || user.wallet_address);
         res.json({
             token,
             user: {
@@ -422,6 +421,11 @@ app.post('/api/auth/login', async (req, res) => {
                 points: user.points
             }
         });
+    } catch (error) {
+        console.error('❌ Login error:', error);
+        res.status(500).json({ error: 'Server error during login' });
+    }
+});
 
 // Token Refresh
 app.post('/api/auth/refresh', (req, res) => {
@@ -446,33 +450,120 @@ app.post('/api/auth/refresh', (req, res) => {
         res.json({ token: accessToken });
     });
 });
+});
+});
 
-// Get Active Tournaments
-app.get('/api/tournaments', (req, res) => {
-    console.log('🏆 Fetching tournaments...');
-    const category = req.query.category || 'all';
+// Get Active Tournaments with filtering and pagination
+app.get('/api/tournaments', async (req, res) => {
+    const VALID_CATEGORIES = ['crypto', 'stocks', 'politics', 'all'];
+    const DEFAULT_PAGE_SIZE = 20;
+    const MAX_PAGE_SIZE = 100;
 
-    let query = 'SELECT * FROM tournaments WHERE status IN ("pending", "active")';
-    let params = [];
+    try {
+        // Parameter validation
+        const category = VALID_CATEGORIES.includes(req.query.category)
+            ? req.query.category
+            : 'all';
+            
+        const page = parseInt(req.query.page) || 1;
+        const pageSize = Math.min(
+            parseInt(req.query.pageSize) || DEFAULT_PAGE_SIZE,
+            MAX_PAGE_SIZE
+        );
 
-    if (category !== 'all') {
-        query += ' AND category = ?';
-        params.push(category);
-    }
+        // Base query construction
+        const queryParams = [];
+        let whereClause = 'WHERE status IN ($1, $2)';
+        queryParams.push('pending', 'active');
 
-    query += ' ORDER BY created_at DESC';
-
-    const { rows: tournaments } = await pool.query(query, params);
-        if (err) {
-            console.error('Error fetching tournaments:', err);
-            return res.status(500).json({ error: 'Failed to fetch tournaments' });
+        // Category filtering
+        if (category !== 'all') {
+            whereClause += ' AND category = $3';
+            queryParams.push(category);
         }
 
-        const formattedTournaments = tournaments.map(fmt);
+        // Main data query
+        const dataQuery = `
+            SELECT
+                t.id,
+                t.title,
+                t.category,
+                t.tournament_type as "tournamentType",
+                t.options,
+                t.entry_fee as "entryFee",
+                t.max_participants as "maxParticipants",
+                t.prize_pool as "prizePool",
+                t.current_participants as "currentParticipants",
+                t.start_time as "startTime",
+                t.end_time as "endTime",
+                t.status,
+                (t.end_time < NOW())::boolean as "expired",
+                COUNT(p.*)::integer as "participantCount"
+            FROM tournaments t
+            LEFT JOIN participants p ON t.id = p.tournament_id
+            ${whereClause}
+            GROUP BY t.id
+            ORDER BY t.created_at DESC
+            LIMIT $${queryParams.length + 1}
+            OFFSET $${queryParams.length + 2}
+        `;
 
-        console.log('✅ Returning', formattedTournaments.length, 'tournaments');
+        // Count query for pagination
+        const countQuery = `
+            SELECT COUNT(*)
+            FROM tournaments
+            ${whereClause}
+        `;
+
+        // Execute parallel queries
+        const [tournamentsResult, countResult] = await Promise.all([
+            pool.query(dataQuery, [
+                ...queryParams,
+                pageSize,
+                (page - 1) * pageSize
+            ]),
+            pool.query(countQuery, queryParams)
+        ]);
+
+        // Format options inline using PostgreSQL JSON functions
+        const formattedTournaments = tournamentsResult.rows.map(t => ({
+            ...t,
+            options: JSON.parse(t.options)
+        }));
+
+        // Set cache headers
+        res.set({
+            'Cache-Control': 'public, max-age=60',
+            'X-Total-Count': countResult.rows[0].count,
+            'X-Page': page,
+            'X-Page-Size': pageSize
+        });
+
+        // Structured logging
+        console.log({
+            event: 'tournaments_fetched',
+            category,
+            page,
+            pageSize,
+            count: formattedTournaments.length,
+            total: countResult.rows[0].count,
+            timestamp: new Date().toISOString()
+        });
+
         res.json(formattedTournaments);
-    });
+    } catch (error) {
+        console.error('Tournaments endpoint error:', {
+            error: error.message,
+            stack: error.stack,
+            queryParams: req.query,
+            timestamp: new Date().toISOString()
+        });
+        
+        res.status(500).json({
+            error: 'Failed to fetch tournaments',
+            reference: 'ERR_TOURNAMENTS_FETCH'
+        });
+    }
 });
 
 // Enter Tournament
@@ -483,171 +574,95 @@ app.post('/api/tournaments/:id/enter', authenticateToken, async (req, res) => {
 
     console.log('🎯 User', userId, 'entering tournament', tournamentId, 'with prediction:', prediction);
     
-const client = await pool.connect();
-try {
-    await client.query('BEGIN');
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
 
-    // 1. Get tournament and user status
-    const tournamentResult = await client.query(
-        `SELECT
-            t.*,
-            u.points AS user_points
-        FROM tournaments t
-        JOIN users u ON u.id = $2
-        WHERE t.id = $1 AND t.status = 'active'`,
-        [tournamentId, userId]
-    );
+        // 1. Get tournament and user status
+        const tournamentResult = await client.query(
+            `SELECT
+                t.*,
+                u.points AS user_points
+            FROM tournaments t
+            JOIN users u ON u.id = $2
+            WHERE t.id = $1 AND t.status = 'active'`,
+            [tournamentId, userId]
+        );
 
-    if (tournamentResult.rows.length === 0) {
-        throw new Error('Tournament not found or not active');
-    }
+        if (tournamentResult.rows.length === 0) {
+            throw new Error('Tournament not found or not active');
+        }
 
-    const tournament = tournamentResult.rows[0];
-    
-    // 2. Validate user can enter
-    if (tournament.user_points < tournament.entry_fee) {
-        throw new Error('Insufficient points');
-    }
+        const tournament = tournamentResult.rows[0];
+        
+        // 2. Validate user can enter
+        if (tournament.user_points < tournament.entry_fee) {
+            throw new Error('Insufficient points');
+        }
 
-    if (tournament.current_participants >= tournament.max_participants) {
-        throw new Error('Tournament full');
-    }
+        if (tournament.current_participants >= tournament.max_participants) {
+            throw new Error('Tournament full');
+        }
 
-    // 3. Check existing participation
-    const existingResult = await client.query(
-        'SELECT id FROM participants WHERE tournament_id = $1 AND user_id = $2',
-        [tournamentId, userId]
-    );
+        // 3. Check existing participation
+        const existingResult = await client.query(
+            'SELECT id FROM participants WHERE tournament_id = $1 AND user_id = $2',
+            [tournamentId, userId]
+        );
 
-    if (existingResult.rows.length > 0) {
-        throw new Error('Already participated');
-    }
+        if (existingResult.rows.length > 0) {
+            throw new Error('Already participated');
+        }
 
-    // 4. Execute transaction
-    await client.query(
-        'UPDATE users SET points = points - $1 WHERE id = $2',
-        [tournament.entry_fee, userId]
-    );
+        // 4. Execute transaction
+        await client.query(
+            'UPDATE users SET points = points - $1 WHERE id = $2',
+            [tournament.entry_fee, userId]
+        );
 
-    await client.query(
-        `INSERT INTO participants
-        (tournament_id, user_id, prediction, points_paid)
-        VALUES ($1, $2, $3, $4)`,
-        [
-            tournamentId,
-            userId,
-            prediction,
-            tournament.entry_fee
-        ]
-    );
+        await client.query(
+            `INSERT INTO participants
+            (tournament_id, user_id, prediction, points_paid)
+            VALUES ($1, $2, $3, $4)`,
+            [
+                tournamentId,
+                userId,
+                prediction,
+                tournament.entry_fee
+            ]
+        );
 
-    await client.query(
-        `UPDATE tournaments SET
-        current_participants = current_participants + 1,
-        prize_pool = prize_pool + $1
-        WHERE id = $2`,
-        [tournament.entry_fee, tournamentId]
-    );
+        await client.query(
+            `UPDATE tournaments SET
+            current_participants = current_participants + 1,
+            prize_pool = prize_pool + $1
+            WHERE id = $2`,
+            [tournament.entry_fee, tournamentId]
+        );
 
-    await client.query('COMMIT');
-        const { rows: [data] } = await pool.query({
-            text: 'SELECT t.*, u.points ' +
-                  'FROM tournaments t ' +
-                  'JOIN users u ON u.id = $2 ' +
-                  'WHERE t.id = $1 AND t.status = \'active\'',
-            values: [tournamentId, userId]
+        await client.query('COMMIT');
+        client.release();
+        console.log('User', userId, 'successfully entered tournament', tournamentId);
+        res.json({ success: true, message: 'Successfully entered tournament' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        client.release();
+        console.error('❌ Tournament entry error:', err);
+        const statusCode = err.message.includes('not found') ? 404 : 400;
+        res.status(statusCode).json({
+            error: err.message || 'Failed to enter tournament',
+            details: process.env.NODE_ENV === 'development' ? err.stack : undefined
         });
-
-            if (err || !data) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({ error: 'Tournament not found or not active' });
-            }
-
-            if (data.points < data.entry_fee) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({ error: 'Insufficient points' });
-            }
-
-            if (data.current_participants >= data.max_participants) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({ error: 'Tournament full' });
-            }
-
-            // Check if already participated
-            const { rows: [existing] } = await pool.query({
-                text: 'SELECT id FROM participants WHERE tournament_id = $1 AND user_id = $2',
-                values: [tournamentId, userId]
-            });
-
-            if (existing) {
-                await client.query('ROLLBACK');
-                    return res.status(400).json({ error: 'Already participated' });
-                }
-
-                // Deduct points
-                db.run('UPDATE users SET points = points - ?, total_tournaments = total_tournaments + 1 WHERE id = ?',
-                    [data.entry_fee, userId], (err) => {
-
-                    if (err) {
-                        await client.query('ROLLBACK');
-                        return res.status(500).json({ error: 'Failed to deduct points' });
-                    }
-
-                    // Add participant
-                    await pool.query(
-                        `INSERT INTO participants
-                        (tournament_id, user_id, prediction, points_paid)
-                        VALUES ($1, $2, $3, $4)`,
-                        [
-                            tournamentId,
-                            userId,
-                            prediction,
-                            data.entry_fee
-                        ]
-                    );
-
-                        if (err) {
-                            await client.query('ROLLBACK');
-                            return res.status(500).json({ error: 'Failed to enter tournament' });
-                        }
-
-                        // Update tournament
-                        await pool.query({
-                            text: 'UPDATE tournaments SET ' +
-                                  'current_participants = current_participants + 1, ' +
-                                  'prize_pool = prize_pool + $1 ' +
-                                  'WHERE id = $2',
-                            values: [data.entry_fee, tournamentId]
-                        });
-
-                            if (err) {
-                                await client.query('ROLLBACK');
-                                return res.status(500).json({ error: 'Failed to update tournament' });
-                            }
-
-                        await client.query('COMMIT');
-                        client.release();
-                      console.log('User', userId, 'successfully entered tournament', tournamentId);
-                      res.json({ success: true, message: 'Successfully entered tournament' });
-                  }
-              });
-          } catch (err) {
-              console.error('❌ Tournament entry error:', err);
-              res.status(500).json({ error: 'Failed to enter tournament' });
-          }
-      });
-  } catch (err) {
-      console.error('❌ Transaction error:', err);
-      res.status(500).json({ error: 'Transaction failed' });
-  }
+    }
 });
 
 // Get User Stats
-app.get('/api/user/stats', authenticateToken, (req, res) => {
-    const userId = req.userId;
+app.get('/api/user/stats', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
 
-    const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
-        if (err || !user) {
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
@@ -668,22 +683,21 @@ app.get('/api/user/stats', authenticateToken, (req, res) => {
         };
 
         res.json(userStats);
-    });
+    } catch (error) {
+        console.error('❌ Error fetching user stats:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
 // Claim Free Points
-app.post('/api/user/claim-free-points', authenticateToken, (req, res) => {
+app.post('/api/user/claim-free-points', authenticateToken, async (req, res) => {
     const userId = req.userId;
     const pointsToAdd = 500;
     const cooldownHours = 24;
 
     try {
         const { rows: [user] } = await pool.query('SELECT last_claim_date FROM users WHERE id = $1', [userId]);
-        if (err) {
-            console.error('❌ Database error:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
+        
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
@@ -697,33 +711,28 @@ app.post('/api/user/claim-free-points', authenticateToken, (req, res) => {
                 const remainingHours = (cooldownHours - hoursSinceClaim).toFixed(1);
                 return res.status(429).json({
                     error: 'Cooldown active',
-                    details: 'Wait ' + remainingHours + ' hours before claiming again',
+                    details: `Wait ${remainingHours} hours before claiming again`,
                     next_claim_available: new Date(lastClaim.getTime() + (cooldownHours * 60 * 60 * 1000))
                 });
             }
         }
 
         await pool.query({
-            text: 'UPDATE users ' +
-                  'SET points = points + $1, ' +
-                  'last_claim_date = NOW() ' +
-                  'WHERE id = $2',
+            text: 'UPDATE users SET points = points + $1, last_claim_date = NOW() WHERE id = $2',
             values: [pointsToAdd, userId]
         });
-                if (err) {
-                    console.error('❌ Points claim error:', err);
-                    return res.status(500).json({ error: 'Failed to claim points' });
-                }
-                
-                console.log('✅ User', userId, 'claimed', pointsToAdd, 'free points');
-                res.json({
-                    success: true,
-                    points: pointsToAdd,
-                    next_claim_available: new Date(now.getTime() + (cooldownHours * 60 * 60 * 1000))
-                });
-            }
-        );
-    });
+
+        console.log('✅ User', userId, 'claimed', pointsToAdd, 'free points');
+        res.json({
+            success: true,
+            points: pointsToAdd,
+            next_claim_available: new Date(now.getTime() + (cooldownHours * 60 * 60 * 1000))
+        });
+
+    } catch (error) {
+        console.error('❌ Points claim error:', error);
+        res.status(500).json({ error: 'Failed to claim points' });
+    }
 });
 
 // Admin Routes (for manual tournament management)
@@ -797,18 +806,17 @@ app.post('/api/admin/tournaments/:id/resolve', (req, res) => {
                         if (completed === winners.length) {
                             await pool.query('COMMIT');
                             console.log('✅ Tournament', tournamentId, 'resolved with', winners.length, 'winners getting', prizePerWinner, 'points each');
-                            res.json({
-                                success: true,
-                                message: 'Tournament resolved with ' + winners.length + ' winners',
-                                prize_per_winner: prizePerWinner
-                            });
-                        }
-                    });
-                });
-            });
+                           res.json({
+                               success: true,
+                               message: `Tournament resolved with ${winners.length} winners`,
+                               prize_per_winner: prizePerWinner
+                           });
+                       }
+                   });
+               });
+           });
         });
     });
-});
 
 // Automated Tournament Management (runs every minute)
 cron.schedule('* * * * *', async () => {
@@ -817,23 +825,36 @@ cron.schedule('* * * * *', async () => {
     
     // Auto-start tournaments
     try {
-        await pool.query(
-            'UPDATE tournaments ' +
-            'SET status = \'active\' ' +
-            'WHERE status = \'pending\' AND start_time <= $1',
+        const startResult = await pool.query(
+            `UPDATE tournaments
+            SET status = 'active'
+            WHERE status = 'pending' AND start_time <= $1`,
             [now]
         );
         
-        await pool.query(
-            'UPDATE tournaments ' +
-            'SET status = \'closed\' ' +
-            'WHERE status = \'active\' AND end_time <= $1',
+        const closeResult = await pool.query(
+            `UPDATE tournaments
+            SET status = 'closed'
+            WHERE status = 'active' AND end_time <= $1`,
             [now]
         );
+        
+        console.log(`✅ Started ${startResult.rowCount}, closed ${closeResult.rowCount} tournaments`);
     } catch (err) {
         console.error('❌ Cron job error:', err);
     }
 }, { scheduled: true });
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('💥 Server error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+    res.status(404).json({ error: 'Endpoint not found' });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
