@@ -1736,7 +1736,7 @@
 <!-- Gaming Daily Challenge v3 -->
 <section class="daily-challenge-section">
   <div class="challenge-wrapper">
-    <div class="daily-challenge-card">
+    <div class="daily-challenge-card" id="daily-challenge">
 
       <!-- animated top bar -->
       <div class="challenge-bar">
@@ -1867,8 +1867,8 @@
         </div>
         
         <div class="tournament-actions">
-          <button class="btn-enter-tournament">Enter Main Tournament</button>
-          <button class="btn-view-leaderboard">View Details</button>
+          <button class="btn-enter-tournament" onclick="scrollToTournaments()">Enter Main Tournament</button>
+          <button class="btn-view-leaderboard" onclick="openTournamentModal(1)">View Details</button>
         </div>
       </div>
     </div>
@@ -1891,7 +1891,7 @@
           </div>
         </div>
         
-        <button class="btn-view-leaderboard">View Hot Tournaments</button>
+        <button class="btn-view-leaderboard" onclick="filterTournaments('crypto')">View Hot Tournaments</button>
       </div>
       
       <div class="sub-tournament-display rising orange-card">
@@ -1911,7 +1911,7 @@
           </div>
         </div>
         
-        <button class="btn-view-leaderboard">View Rising Tournaments</button>
+        <button class="btn-view-leaderboard" onclick="filterTournaments('stocks')">View Rising Tournaments</button>
       </div>
     </div>
   </div>

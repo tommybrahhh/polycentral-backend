@@ -1,0 +1,24 @@
+# Ignore environment files
+backend/.env*
+*.env
+.env
+.env.production
+
+# Ignore sensitive files
+**/*.key
+**/*.pem
+**/*.secret
+
+# Ignore database files
+*.db
+*.db-*
+
+# Ignore log files
+*.log
+
+# Ignore node_modules
+node_modules/
+
+# Ignore build artifacts
+dist/
+build/
