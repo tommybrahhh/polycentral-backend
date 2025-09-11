@@ -114,8 +114,10 @@ return t;
             CREATE TABLE IF NOT EXISTS tournaments (
                 id SERIAL PRIMARY KEY,
                 title TEXT NOT NULL,
+                description TEXT,
                 category TEXT NOT NULL,
-                tournament_type TEXT NOT NULL,
+                event_type TEXT NOT NULL CHECK(event_type IN ('prediction', 'tournament')),
+                location TEXT,
                 options TEXT NOT NULL,
                 entry_fee INTEGER NOT NULL,
                 max_participants INTEGER DEFAULT 100,
@@ -123,13 +125,15 @@ return t;
                 current_participants INTEGER DEFAULT 0,
                 start_time TIMESTAMP NOT NULL,
                 end_time TIMESTAMP NOT NULL,
-                status TEXT DEFAULT 'pending',
+                status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'closed', 'resolved')),
+                visibility TEXT DEFAULT 'public' CHECK(visibility IN ('public', 'private')),
                 correct_answer TEXT,
-                created_at TIMESTAMP DEFAULT NOW()
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
             )`);
         console.log('Tournaments table ready');
 
-        // Participants table (only once)
+        // Participants table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS participants (
                 id SERIAL PRIMARY KEY,
@@ -140,6 +144,36 @@ return t;
                 created_at TIMESTAMP DEFAULT NOW()
             )`);
         console.log('Participants table ready');
+
+        // Events table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS events (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                location TEXT NOT NULL,
+                start_time TIMESTAMP NOT NULL,
+                end_time TIMESTAMP NOT NULL,
+                capacity INTEGER DEFAULT 100,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )`);
+        console.log('Events table ready');
+
+        // Events table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS events (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                location TEXT NOT NULL,
+                start_time TIMESTAMP NOT NULL,
+                end_time TIMESTAMP NOT NULL,
+                capacity INTEGER DEFAULT 100,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )`);
+        console.log('Events table ready');
 
         // Seed data
         await createSampleTournaments();
@@ -735,96 +769,263 @@ app.post('/api/user/claim-free-points', authenticateToken, async (req, res) => {
     }
 });
 
-// Admin Routes (for manual tournament management)
+// Admin Routes - Event/Tournament Management
 
-// Start Tournament
-app.post('/api/admin/tournaments/:id/start', (req, res) => {
-    const tournamentId = req.params.id;
-    console.log('🚀 Starting tournament', tournamentId);
+// Events CRUD Operations
+app.post('/api/events', authenticateToken, async (req, res) => {
+    const { title, description, location, start_time, end_time, capacity } = req.body;
+    
+    try {
+        const { rows: [newEvent] } = await pool.query(
+            `INSERT INTO events
+            (title, description, location, start_time, end_time, capacity)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING *`,
+            [title, description, location, start_time, end_time, capacity]
+        );
+        
+        res.status(201).json(newEvent);
+    } catch (error) {
+        console.error('Event creation error:', error);
+        res.status(500).json({ error: 'Failed to create event' });
+    }
+});
 
-    const { rowCount } = await pool.query(
-        'UPDATE tournaments SET status = \'active\' WHERE id = $1 AND status = \'pending\'',
-        [tournamentId], function(err) {
-        if (err) {
-            console.error('Error starting tournament:', err);
-            return res.status(500).json({ error: 'Failed to start tournament' });
+app.get('/api/events', async (req, res) => {
+    try {
+        const { rows: events } = await pool.query(
+            `SELECT * FROM events
+            ORDER BY start_time DESC`
+        );
+        res.json(events);
+    } catch (error) {
+        console.error('Events fetch error:', error);
+        res.status(500).json({ error: 'Failed to fetch events' });
+    }
+});
+
+app.put('/api/events/:id', authenticateToken, async (req, res) => {
+    const eventId = req.params.id;
+    const updates = req.body;
+    
+    try {
+        const { rows: [updatedEvent] } = await pool.query(
+            `UPDATE events SET
+                title = COALESCE($1, title),
+                description = COALESCE($2, description),
+                location = COALESCE($3, location),
+                start_time = COALESCE($4, start_time),
+                end_time = COALESCE($5, end_time),
+                capacity = COALESCE($6, capacity),
+                updated_at = NOW()
+            WHERE id = $7
+            RETURNING *`,
+            [
+                updates.title,
+                updates.description,
+                updates.location,
+                updates.start_time,
+                updates.end_time,
+                updates.capacity,
+                eventId
+            ]
+        );
+        
+        if (!updatedEvent) {
+            return res.status(404).json({ error: 'Event not found' });
         }
-        console.log('✅ Tournament', tournamentId, 'started');
-        res.json({ success: true, message: 'Tournament started' });
-    });
+        
+        res.json(updatedEvent);
+    } catch (error) {
+        console.error('Event update error:', error);
+        res.status(500).json({ error: 'Failed to update event' });
+    }
+});
+
+app.delete('/api/events/:id', authenticateToken, async (req, res) => {
+    const eventId = req.params.id;
+    
+    try {
+        const { rowCount } = await pool.query(
+            'DELETE FROM events WHERE id = $1',
+            [eventId]
+        );
+        
+        if (rowCount === 0) {
+            return res.status(404).json({ error: 'Event not found' });
+        }
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Event deletion error:', error);
+        res.status(500).json({ error: 'Failed to delete event' });
+    }
+});
+
+// Create New Tournament Event
+app.post('/api/admin/events', authenticateToken, async (req, res) => {
+    const {
+        title,
+        description,
+        category,
+        event_type,
+        location,
+        options,
+        entry_fee,
+        max_participants,
+        start_time,
+        end_time,
+        visibility
+    } = req.body;
+
+    try {
+        const { rows: [newEvent] } = await pool.query(
+            `INSERT INTO tournaments (
+                title, description, category, event_type, location, options,
+                entry_fee, max_participants, start_time, end_time, visibility
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING *`,
+            [
+                title,
+                description,
+                category,
+                event_type,
+                location,
+                JSON.stringify(options),
+                entry_fee,
+                max_participants,
+                start_time,
+                end_time,
+                visibility || 'public'
+            ]
+        );
+
+        res.status(201).json({
+            ...newEvent,
+            options: JSON.parse(newEvent.options)
+        });
+    } catch (error) {
+        console.error('Event creation error:', error);
+        res.status(500).json({ error: 'Failed to create event' });
+    }
+});
+
+// Update Event
+app.put('/api/admin/events/:id', authenticateToken, async (req, res) => {
+    const eventId = req.params.id;
+    const updates = req.body;
+
+    try {
+        const { rows: [updatedEvent] } = await pool.query(
+            `UPDATE tournaments SET
+                title = COALESCE($1, title),
+                description = COALESCE($2, description),
+                category = COALESCE($3, category),
+                location = COALESCE($4, location),
+                options = COALESCE($5, options),
+                entry_fee = COALESCE($6, entry_fee),
+                max_participants = COALESCE($7, max_participants),
+                start_time = COALESCE($8, start_time),
+                end_time = COALESCE($9, end_time),
+                visibility = COALESCE($10, visibility),
+                updated_at = NOW()
+            WHERE id = $11
+            RETURNING *`,
+            [
+                updates.title,
+                updates.description,
+                updates.category,
+                updates.location,
+                updates.options ? JSON.stringify(updates.options) : null,
+                updates.entry_fee,
+                updates.max_participants,
+                updates.start_time,
+                updates.end_time,
+                updates.visibility,
+                eventId
+            ]
+        );
+
+        if (!updatedEvent) {
+            return res.status(404).json({ error: 'Event not found' });
+        }
+
+        res.json({
+            ...updatedEvent,
+            options: JSON.parse(updatedEvent.options)
+        });
+    } catch (error) {
+        console.error('Event update error:', error);
+        res.status(500).json({ error: 'Failed to update event' });
+    }
+});
 });
 
 // Resolve Tournament
-app.post('/api/admin/tournaments/:id/resolve', (req, res) => {
+app.post('/api/admin/tournaments/:id/resolve', async (req, res) => {
     const tournamentId = req.params.id;
     const { correct_answer } = req.body;
+    const client = await pool.connect();
 
     console.log('🏁 Resolving tournament', tournamentId, 'with answer:', correct_answer);
 
-    db.serialize(() => {
-        await pool.query('BEGIN');
+    try {
+        await client.query('BEGIN');
 
-        // Update tournament
-        db.run('UPDATE tournaments SET status = "resolved", correct_answer = ? WHERE id = ?',
-            [correct_answer, tournamentId], (err) => {
+        // Update tournament status
+        await client.query(
+            'UPDATE tournaments SET status = $1, correct_answer = $2 WHERE id = $3',
+            ['resolved', correct_answer, tournamentId]
+        );
 
-            if (err) {
-                await client.query('ROLLBACK');
-                return res.status(500).json({ error: 'Failed to resolve tournament' });
-            }
+        // Get winners and prize pool
+        const winners = await client.query(
+            `SELECT p.user_id, t.prize_pool, COUNT(*) OVER() as winner_count
+             FROM participants p
+             JOIN tournaments t ON p.tournament_id = t.id
+             WHERE p.tournament_id = $1 AND p.prediction = $2`,
+            [tournamentId, correct_answer]
+        );
 
-            // Get winners and prize pool
-            const { rows: winners } = await pool.query({
-                text: `SELECT p.user_id, t.prize_pool, COUNT(*) OVER() as winner_count
-                       FROM participants p
-                       JOIN tournaments t ON p.tournament_id = t.id
-                       WHERE p.tournament_id = $1 AND p.prediction = $2`,
-                values: [tournamentId, correct_answer]
-            });
+        if (winners.rows.length === 0) {
+            await client.query('COMMIT');
+            console.log('🏁 Tournament', tournamentId, 'resolved, no winners');
+            return res.json({ success: true, message: 'Tournament resolved, no winners' });
+        }
 
-                if (err) {
-                    await client.query('ROLLBACK');
-                    return res.status(500).json({ error: 'Failed to get winners' });
-                }
+        const prizePerWinner = Math.floor(winners.rows[0].prize_pool / winners.rows.length);
+        
+        // Update winners' points
+        for (const winner of winners.rows) {
+            await client.query(
+                'UPDATE users SET points = points + $1, won_tournaments = won_tournaments + 1 WHERE id = $2',
+                [prizePerWinner, winner.user_id]
+            );
+        }
 
-                if (winners.length === 0) {
-                    db.run('COMMIT');
-                    console.log('🏁 Tournament', tournamentId, 'resolved, no winners');
-                    return res.json({ success: true, message: 'Tournament resolved, no winners' });
-                }
-
-                winners.forEach(w => fmt(w));
-
-                // Distribute prizes
-                const prizePerWinner = Math.floor(winners[0].prize_pool / winners.length);
-
-                let completed = 0;
-                winners.forEach(winner => {
-                    db.run('UPDATE users SET points = points + ?, won_tournaments = won_tournaments + 1 WHERE id = ?',
-                        [prizePerWinner, winner.user_id], (err) => {
-                        completed++;
-                        if (completed === winners.length) {
-                            await pool.query('COMMIT');
-                            console.log('✅ Tournament', tournamentId, 'resolved with', winners.length, 'winners getting', prizePerWinner, 'points each');
-                           res.json({
-                               success: true,
-                               message: `Tournament resolved with ${winners.length} winners`,
-                               prize_per_winner: prizePerWinner
-                           });
-                       }
-                   });
-               });
-           });
+        await client.query('COMMIT');
+        console.log(`✅ Tournament ${tournamentId} resolved with ${winners.rows.length} winners`);
+        res.json({
+            success: true,
+            message: `Tournament resolved with ${winners.rows.length} winners`,
+            prize_per_winner: prizePerWinner
         });
-    });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('❌ Tournament resolution error:', err);
+        res.status(500).json({ error: 'Failed to resolve tournament' });
+    } finally {
+        client.release();
+    }
+});
 
 // Automated Tournament Management (runs every minute)
 cron.schedule('* * * * *', async () => {
     console.log('⏰ Cron job starting...');
     const now = new Date().toISOString();
     
-    // Auto-start tournaments
     try {
+        // Update pending tournaments to active
         const startResult = await pool.query(
             `UPDATE tournaments
             SET status = 'active'
@@ -832,6 +1033,7 @@ cron.schedule('* * * * *', async () => {
             [now]
         );
         
+        // Close expired active tournaments
         const closeResult = await pool.query(
             `UPDATE tournaments
             SET status = 'closed'
@@ -839,22 +1041,17 @@ cron.schedule('* * * * *', async () => {
             [now]
         );
         
-        console.log(`✅ Started ${startResult.rowCount}, closed ${closeResult.rowCount} tournaments`);
+        console.log(`Automated updates - Started: ${startResult.rowCount}, Closed: ${closeResult.rowCount}`);
     } catch (err) {
-        console.error('❌ Cron job error:', err);
+        console.error('Cron job error:', err);
     }
+}, {
+    scheduled: true,
+    timezone: 'Europe/Madrid'
+});
 }, { scheduled: true });
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error('💥 Server error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-    res.status(404).json({ error: 'Endpoint not found' });
-});
+}, { scheduled: true });
+}, { scheduled: true });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
