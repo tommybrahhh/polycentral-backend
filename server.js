@@ -484,8 +484,6 @@ app.post('/api/auth/refresh', (req, res) => {
         res.json({ token: accessToken });
     });
 });
-});
-});
 
 // Get Active Tournaments with filtering and pagination
 app.get('/api/tournaments', async (req, res) => {
@@ -959,7 +957,6 @@ app.put('/api/admin/events/:id', authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to update event' });
     }
 });
-});
 
 // Resolve Tournament
 app.post('/api/admin/tournaments/:id/resolve', async (req, res) => {
@@ -1049,9 +1046,6 @@ cron.schedule('* * * * *', async () => {
     scheduled: true,
     timezone: 'Europe/Madrid'
 });
-}, { scheduled: true });
-}, { scheduled: true });
-}, { scheduled: true });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
