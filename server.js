@@ -109,6 +109,8 @@ return t;
             }
         }
 
+        
+
         // Tournaments table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS tournaments (
