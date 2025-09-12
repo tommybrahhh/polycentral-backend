@@ -111,7 +111,7 @@ return t;
 
         
 
-        // Tournaments table
+      // Tournaments table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS tournaments (
                 id SERIAL PRIMARY KEY,
@@ -119,6 +119,7 @@ return t;
                 description TEXT,
                 category TEXT NOT NULL,
                 event_type TEXT NOT NULL CHECK(event_type IN ('prediction', 'tournament')),
+                tournament_type TEXT DEFAULT 'prediction',
                 location TEXT,
                 options TEXT NOT NULL,
                 entry_fee INTEGER NOT NULL,
@@ -146,21 +147,6 @@ return t;
                 created_at TIMESTAMP DEFAULT NOW()
             )`);
         console.log('Participants table ready');
-
-        // Events table
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS events (
-                id SERIAL PRIMARY KEY,
-                title TEXT NOT NULL,
-                description TEXT,
-                location TEXT NOT NULL,
-                start_time TIMESTAMP NOT NULL,
-                end_time TIMESTAMP NOT NULL,
-                capacity INTEGER DEFAULT 100,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
-            )`);
-        console.log('Events table ready');
 
         // Events table
         await pool.query(`
