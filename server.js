@@ -84,7 +84,7 @@ return t;
 // ----------  CREATE TABLES (idempotent) ----------
 (async () => {
   try {
-    /* 1. users (unchanged) */
+    /* 1. users table */
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id               SERIAL PRIMARY KEY,
@@ -99,7 +99,28 @@ return t;
         created_at       TIMESTAMP DEFAULT NOW()
       )`);
 
-    /* 2. tournament_types – NEW */
+    /* 2. tournaments table - The missing piece! */
+    // Note: We've added `UNIQUE` to the title column to fix the ON CONFLICT error.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tournaments (
+        id                    SERIAL PRIMARY KEY,
+        title                 TEXT UNIQUE NOT NULL,
+        description           TEXT,
+        category              TEXT,
+        options               JSONB,
+        entry_fee             INTEGER NOT NULL DEFAULT 0,
+        max_participants      INTEGER NOT NULL DEFAULT 100,
+        current_participants  INTEGER NOT NULL DEFAULT 0,
+        prize_pool            INTEGER NOT NULL DEFAULT 0,
+        start_time            TIMESTAMP,
+        end_time              TIMESTAMP,
+        status                TEXT DEFAULT 'pending',
+        correct_answer        TEXT,
+        created_at            TIMESTAMP DEFAULT NOW(),
+        updated_at            TIMESTAMP DEFAULT NOW()
+      )`);
+
+    /* 3. tournament_types table */
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tournament_types (
         id          SERIAL PRIMARY KEY,
@@ -107,7 +128,7 @@ return t;
         description TEXT
       )`);
 
-    /* 3. seed the types we actually use */
+    /* 4. Seed the tournament_types */
     await pool.query(`
       INSERT INTO tournament_types (name, description) VALUES
         ('prediction', 'Classic yes/no or multiple-choice prediction'),
@@ -115,15 +136,14 @@ return t;
         ('contest',    'Creative or photo contests')
       ON CONFLICT (name) DO NOTHING`);
 
-    /* 4. Add the new foreign key column if it doesn't exist */
+    /* 5. Add the new foreign key column to tournaments */
     await pool.query(`
       ALTER TABLE tournaments
         ADD COLUMN IF NOT EXISTS tournament_type_id INTEGER
           REFERENCES tournament_types(id)
           ON UPDATE CASCADE ON DELETE RESTRICT`);
 
-    // --- START: CONDITIONAL MIGRATION LOGIC ---
-    // Check if the old text-based 'tournament_type' column still exists
+    /* 6. Conditionally migrate data from the old text column */
     const { rows: columnCheck } = await pool.query(`
       SELECT 1
       FROM information_schema.columns
@@ -132,8 +152,6 @@ return t;
 
     if (columnCheck.length > 0) {
       console.log('🏁 Old `tournament_type` column found. Starting one-time migration...');
-      
-      // 5. Migrate old data from the text column to the new foreign key
       await pool.query(`
         UPDATE tournaments t
         SET    tournament_type_id = tt.id
@@ -141,31 +159,27 @@ return t;
         WHERE  tt.name = COALESCE(t.tournament_type, 'prediction')
           AND  t.tournament_type_id IS NULL`);
 
-      // 6. Drop the now obsolete text column
-      await pool.query(`
-        ALTER TABLE tournaments
-          DROP COLUMN IF EXISTS tournament_type`);
-      
+      await pool.query(`ALTER TABLE tournaments DROP COLUMN IF EXISTS tournament_type`);
       console.log('✅ Migration complete. Dropped old `tournament_type` column.');
     }
-    // --- END: CONDITIONAL MIGRATION LOGIC ---
 
-    /* 7. make FK non-nullable from now on */
+    /* 7. Make the foreign key non-nullable */
     await pool.query(`
       ALTER TABLE tournaments
         ALTER COLUMN tournament_type_id SET NOT NULL`);
 
-    /* 8. rest of your original tables */
+    /* 8. participants table */
     await pool.query(`
       CREATE TABLE IF NOT EXISTS participants (
         id             SERIAL PRIMARY KEY,
-        tournament_id  INTEGER REFERENCES tournaments(id),
-        user_id        INTEGER REFERENCES users(id),
+        tournament_id  INTEGER REFERENCES tournaments(id) ON DELETE CASCADE,
+        user_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,
         prediction     TEXT NOT NULL,
         points_paid    INTEGER NOT NULL,
         created_at     TIMESTAMP DEFAULT NOW()
       )`);
 
+    /* 9. events table (potentially legacy/separate) */
     await pool.query(`
       CREATE TABLE IF NOT EXISTS events (
         id          SERIAL PRIMARY KEY,
