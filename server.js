@@ -84,7 +84,7 @@ return t;
 // ----------  CREATE TABLES (idempotent) ----------
 (async () => {
   try {
-    /* 1.  users (unchanged) */
+    /* 1. users (unchanged) */
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id               SERIAL PRIMARY KEY,
@@ -99,7 +99,7 @@ return t;
         created_at       TIMESTAMP DEFAULT NOW()
       )`);
 
-    /* 2.  tournament_types  – NEW */
+    /* 2. tournament_types – NEW */
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tournament_types (
         id          SERIAL PRIMARY KEY,
@@ -107,7 +107,7 @@ return t;
         description TEXT
       )`);
 
-    /* 3.  seed the types we actually use */
+    /* 3. seed the types we actually use */
     await pool.query(`
       INSERT INTO tournament_types (name, description) VALUES
         ('prediction', 'Classic yes/no or multiple-choice prediction'),
@@ -115,32 +115,47 @@ return t;
         ('contest',    'Creative or photo contests')
       ON CONFLICT (name) DO NOTHING`);
 
-    /* 4.  tournaments – drop old text column, add FK once */
+    /* 4. Add the new foreign key column if it doesn't exist */
     await pool.query(`
       ALTER TABLE tournaments
         ADD COLUMN IF NOT EXISTS tournament_type_id INTEGER
           REFERENCES tournament_types(id)
           ON UPDATE CASCADE ON DELETE RESTRICT`);
 
-    /* 5.  migrate any old rows (tournament_type text → FK) */
-    await pool.query(`
-      UPDATE tournaments t
-      SET    tournament_type_id = tt.id
-      FROM   tournament_types tt
-      WHERE  tt.name = COALESCE(t.tournament_type, 'prediction')
-        AND  t.tournament_type_id IS NULL`);
+    // --- START: CONDITIONAL MIGRATION LOGIC ---
+    // Check if the old text-based 'tournament_type' column still exists
+    const { rows: columnCheck } = await pool.query(`
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'tournaments' AND column_name = 'tournament_type'
+    `);
 
-    /* 6.  drop the obsolete text column */
-    await pool.query(`
-      ALTER TABLE tournaments
-        DROP COLUMN IF EXISTS tournament_type`);
+    if (columnCheck.length > 0) {
+      console.log('🏁 Old `tournament_type` column found. Starting one-time migration...');
+      
+      // 5. Migrate old data from the text column to the new foreign key
+      await pool.query(`
+        UPDATE tournaments t
+        SET    tournament_type_id = tt.id
+        FROM   tournament_types tt
+        WHERE  tt.name = COALESCE(t.tournament_type, 'prediction')
+          AND  t.tournament_type_id IS NULL`);
 
-    /* 7.  make FK non-nullable from now on */
+      // 6. Drop the now obsolete text column
+      await pool.query(`
+        ALTER TABLE tournaments
+          DROP COLUMN IF EXISTS tournament_type`);
+      
+      console.log('✅ Migration complete. Dropped old `tournament_type` column.');
+    }
+    // --- END: CONDITIONAL MIGRATION LOGIC ---
+
+    /* 7. make FK non-nullable from now on */
     await pool.query(`
       ALTER TABLE tournaments
         ALTER COLUMN tournament_type_id SET NOT NULL`);
 
-    /* 8.  rest of your original tables */
+    /* 8. rest of your original tables */
     await pool.query(`
       CREATE TABLE IF NOT EXISTS participants (
         id             SERIAL PRIMARY KEY,
@@ -165,7 +180,7 @@ return t;
       )`);
 
     console.log('✅ All tables ready');
-    await createSampleTournaments(); // we update this next
+    await createSampleTournaments();
     await createTestUsers();
   } catch (err) {
     console.error('❌ DB init error:', err);
