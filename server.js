@@ -78,182 +78,182 @@ if (t.options && typeof t.options === 'string') t.options = JSON.parse(t.options
 return t;
 }
 
-// Create tables if they don't exist
+// ----------  CREATE TABLES (idempotent) ----------
 (async () => {
-    try {
-        // Users table
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                email TEXT UNIQUE,
-                wallet_address TEXT UNIQUE,
-                username TEXT,
-                password_hash TEXT,
-                points INTEGER DEFAULT 1000,
-                total_tournaments INTEGER DEFAULT 0,
-                won_tournaments INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT NOW()
-            )`);
-        console.log('Users table ready');
+  try {
+    /* 1.  users (unchanged) */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id               SERIAL PRIMARY KEY,
+        email            TEXT UNIQUE,
+        wallet_address   TEXT UNIQUE,
+        username         TEXT,
+        password_hash    TEXT,
+        points           INTEGER DEFAULT 1000,
+        total_tournaments INTEGER DEFAULT 0,
+        won_tournaments  INTEGER DEFAULT 0,
+        last_claim_date  TIMESTAMP,
+        created_at       TIMESTAMP DEFAULT NOW()
+      )`);
 
-        // Migrate: add last_claim_date if not exists
-        try {
-            await pool.query(`
-                ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS last_claim_date TIMESTAMP
-            `);
-            console.log('Column last_claim_date added');
-        } catch (err) {
-            if (!err.message.includes('duplicate column name')) {
-                console.error('Migration error:', err);
-            }
-        }
+    /* 2.  tournament_types  – NEW */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tournament_types (
+        id          SERIAL PRIMARY KEY,
+        name        TEXT UNIQUE NOT NULL,
+        description TEXT
+      )`);
 
-        
+    /* 3.  seed the types we actually use */
+    await pool.query(`
+      INSERT INTO tournament_types (name, description) VALUES
+        ('prediction', 'Classic yes/no or multiple-choice prediction'),
+        ('tournament', 'Head-to-head bracket-style tournament'),
+        ('contest',    'Creative or photo contests')
+      ON CONFLICT (name) DO NOTHING`);
 
-      // Tournaments table
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS tournaments (
-                id SERIAL PRIMARY KEY,
-                title TEXT NOT NULL,
-                description TEXT,
-                category TEXT NOT NULL,
-                event_type TEXT NOT NULL CHECK(event_type IN ('prediction', 'tournament')),
-                tournament_type TEXT DEFAULT 'prediction',
-                location TEXT,
-                options TEXT NOT NULL,
-                entry_fee INTEGER NOT NULL,
-                max_participants INTEGER DEFAULT 100,
-                prize_pool INTEGER DEFAULT 0,
-                current_participants INTEGER DEFAULT 0,
-                start_time TIMESTAMP NOT NULL,
-                end_time TIMESTAMP NOT NULL,
-                status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'closed', 'resolved')),
-                visibility TEXT DEFAULT 'public' CHECK(visibility IN ('public', 'private')),
-                correct_answer TEXT,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
-            )`);
-        console.log('Tournaments table ready');
+    /* 4.  tournaments – drop old text column, add FK once */
+    await pool.query(`
+      ALTER TABLE tournaments
+        ADD COLUMN IF NOT EXISTS tournament_type_id INTEGER
+          REFERENCES tournament_types(id)
+          ON UPDATE CASCADE ON DELETE RESTRICT`);
 
-        // Participants table
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS participants (
-                id SERIAL PRIMARY KEY,
-                tournament_id INTEGER REFERENCES tournaments(id),
-                user_id INTEGER REFERENCES users(id),
-                prediction TEXT NOT NULL,
-                points_paid INTEGER NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW()
-            )`);
-        console.log('Participants table ready');
+    /* 5.  migrate any old rows (tournament_type text → FK) */
+    await pool.query(`
+      UPDATE tournaments t
+      SET    tournament_type_id = tt.id
+      FROM   tournament_types tt
+      WHERE  tt.name = COALESCE(t.tournament_type, 'prediction')
+        AND  t.tournament_type_id IS NULL`);
 
-        // Events table
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS events (
-                id SERIAL PRIMARY KEY,
-                title TEXT NOT NULL,
-                description TEXT,
-                location TEXT NOT NULL,
-                start_time TIMESTAMP NOT NULL,
-                end_time TIMESTAMP NOT NULL,
-                capacity INTEGER DEFAULT 100,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
-            )`);
-        console.log('Events table ready');
+    /* 6.  drop the obsolete text column */
+    await pool.query(`
+      ALTER TABLE tournaments
+        DROP COLUMN IF EXISTS tournament_type`);
 
-        // Seed data
-        await createSampleTournaments();
-        await createTestUsers();
-    } catch (err) {
-        console.error('❌ Database initialization error:', err);
-    }
+    /* 7.  make FK non-nullable from now on */
+    await pool.query(`
+      ALTER TABLE tournaments
+        ALTER COLUMN tournament_type_id SET NOT NULL`);
+
+    /* 8.  rest of your original tables */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS participants (
+        id             SERIAL PRIMARY KEY,
+        tournament_id  INTEGER REFERENCES tournaments(id),
+        user_id        INTEGER REFERENCES users(id),
+        prediction     TEXT NOT NULL,
+        points_paid    INTEGER NOT NULL,
+        created_at     TIMESTAMP DEFAULT NOW()
+      )`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS events (
+        id          SERIAL PRIMARY KEY,
+        title       TEXT NOT NULL,
+        description TEXT,
+        location    TEXT NOT NULL,
+        start_time  TIMESTAMP NOT NULL,
+        end_time    TIMESTAMP NOT NULL,
+        capacity    INTEGER DEFAULT 100,
+        created_at  TIMESTAMP DEFAULT NOW(),
+        updated_at  TIMESTAMP DEFAULT NOW()
+      )`);
+
+    console.log('✅ All tables ready');
+    await createSampleTournaments(); // we update this next
+    await createTestUsers();
+  } catch (err) {
+    console.error('❌ DB init error:', err);
+  }
 })();
 
 // Create sample tournaments for testing
 async function createSampleTournaments() {
-    const sampleTournaments = [
-        {
-            title: "Bitcoin Price Prediction - End of Week",
-            category: "crypto",
-            type: "yes_no",
-            options: JSON.stringify(["Above $45,000", "Below $45,000"]),
-            entry_fee: 100,
-            max_participants: 50,
-            start_time: new Date(Date.now() - 60000).toISOString(),
-            end_time: new Date(Date.now() + 2 * 3600000).toISOString(),
-            status: 'active'
-        },
-        {
-            title: "Tesla Stock Movement Next Day",
-            category: "stocks",
-            type: "multiple_choice",
-            options: JSON.stringify(["Up 3%+", "Down 3%+", "Sideways (-3% to +3%)"]),
-            entry_fee: 150,
-            max_participants: 30,
-            start_time: new Date(Date.now() - 60000).toISOString(),
-            end_time: new Date(Date.now() + 4 * 3600000).toISOString(),
-            status: 'active'
-        },
-        {
-            title: "Next US Fed Interest Rate Decision",
-            category: "politics",
-            type: "multiple_choice",
-            options: JSON.stringify(["Increase 0.25%", "Keep Same", "Decrease 0.25%"]),
-            entry_fee: 200,
-            max_participants: 40,
-            start_time: new Date(Date.now() - 60000).toISOString(),
-            end_time: new Date(Date.now() + 6 * 3600000).toISOString(),
-            status: 'active'
-        },
-        {
-            title: "Ethereum vs Solana Market Cap",
-            category: "crypto",
-            type: "yes_no",
-            options: JSON.stringify(["Ethereum higher", "Solana higher"]),
-            entry_fee: 75,
-            max_participants: 25,
-            start_time: new Date(Date.now() - 60000).toISOString(),
-            end_time: new Date(Date.now() + 5 * 3600000).toISOString(),
-            status: 'active'
-        },
-        {
-            title: "Apple Stock Prediction",
-            category: "stocks",
-            type: "multiple_choice",
-            options: JSON.stringify(["Up 5%+", "Down 5%+", "Flat"]),
-            entry_fee: 120,
-            max_participants: 60,
-            start_time: new Date(Date.now() - 60000).toISOString(),
-            end_time: new Date(Date.now() + 3 * 3600000).toISOString(),
-            status: 'active'
-        }
-    ];
+  /* get the FK id for “prediction” once */
+  const { rows: [typeRow] } = await pool.query(
+    'SELECT id FROM tournament_types WHERE name = $1',
+    ['prediction']
+  );
+  if (!typeRow) throw new Error('tournament_type “prediction” not found');
 
-for (const tournament of sampleTournaments) {
-    await pool.query(
-        `INSERT INTO tournaments (
-            title, category, tournament_type, options,
-            entry_fee, max_participants,
-            start_time, end_time, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        ON CONFLICT (title) DO NOTHING`,
-        [
-            tournament.title,
-            tournament.category,
-            tournament.type,
-            tournament.options,
-            tournament.entry_fee,
-            tournament.max_participants,
-            tournament.start_time,
-            tournament.end_time,
-            tournament.status
-        ]
-    );
-    console.log('Created tournament:', tournament.title);
-}
+  const sampleTournaments = [
+    {
+      title: 'Bitcoin Price Prediction - End of Week',
+      category: 'crypto',
+      options: JSON.stringify(['Above $45,000', 'Below $45,000']),
+      entry_fee: 100,
+      max_participants: 50,
+      start_time: new Date(Date.now() - 60000).toISOString(),
+      end_time: new Date(Date.now() + 2 * 3600000).toISOString(),
+      status: 'active'
+    },
+    {
+      title: 'Tesla Stock Movement Next Day',
+      category: 'stocks',
+      options: JSON.stringify(['Up 3%+', 'Down 3%+', 'Sideways (-3% to +3%)']),
+      entry_fee: 150,
+      max_participants: 30,
+      start_time: new Date(Date.now() - 60000).toISOString(),
+      end_time: new Date(Date.now() + 4 * 3600000).toISOString(),
+      status: 'active'
+    },
+    {
+      title: 'Next US Fed Interest Rate Decision',
+      category: 'politics',
+      options: JSON.stringify(['Increase 0.25%', 'Keep Same', 'Decrease 0.25%']),
+      entry_fee: 200,
+      max_participants: 40,
+      start_time: new Date(Date.now() - 60000).toISOString(),
+      end_time: new Date(Date.now() + 6 * 3600000).toISOString(),
+      status: 'active'
+    },
+    {
+      title: 'Ethereum vs Solana Market Cap',
+      category: 'crypto',
+      options: JSON.stringify(['Ethereum higher', 'Solana higher']),
+      entry_fee: 75,
+      max_participants: 25,
+      start_time: new Date(Date.now() - 60000).toISOString(),
+      end_time: new Date(Date.now() + 5 * 3600000).toISOString(),
+      status: 'active'
+    },
+    {
+      title: 'Apple Stock Prediction',
+      category: 'stocks',
+      options: JSON.stringify(['Up 5%+', 'Down 5%+', 'Flat']),
+      entry_fee: 120,
+      max_participants: 60,
+      start_time: new Date(Date.now() - 60000).toISOString(),
+      end_time: new Date(Date.now() + 3 * 3600000).toISOString(),
+      status: 'active'
     }
+  ];
+
+  for (const t of sampleTournaments) {
+    await pool.query(
+      `INSERT INTO tournaments
+         (title, category, tournament_type_id, options,
+          entry_fee, max_participants,
+          start_time, end_time, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (title) DO NOTHING`,
+      [
+        t.title,
+        t.category,
+        typeRow.id, // ← FK instead of text
+        t.options,
+        t.entry_fee,
+        t.max_participants,
+        t.start_time,
+        t.end_time,
+        t.status
+      ]
+    );
+    console.log('Created tournament:', t.title);
+  }
+}
 
 // Create test users for demo
 async function createTestUsers() {
@@ -584,6 +584,12 @@ app.get('/api/tournaments', async (req, res) => {
             reference: 'ERR_TOURNAMENTS_FETCH'
         });
     }
+});
+
+// GET /api/tournament-types  – list all types
+app.get('/api/tournament-types', async (_req, res) => {
+  const { rows } = await pool.query('SELECT * FROM tournament_types ORDER BY id');
+  res.json(rows);
 });
 
 // Enter Tournament
