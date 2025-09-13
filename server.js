@@ -53,8 +53,11 @@ app.use((req, res, next) => {
 
 // Rate limiting - prevent spam
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,                 // limit each IP to 100 requests / window
+  standardHeaders: true,    // adds RateLimit-* headers
+  legacyHeaders: false,     // disables X-RateLimit-* (old)
+  message: { error: 'Too many requests, please try again later.' }
 });
 app.use('/api/', limiter);
 
