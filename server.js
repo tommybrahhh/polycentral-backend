@@ -496,22 +496,22 @@ app.get('/api/tournaments', async (req, res) => {
 
         // Base query construction
         const queryParams = [];
-        let whereClause = 'WHERE status IN ($1, $2)';
+        let whereClause = 'WHERE t.status IN ($1, $2)';
         queryParams.push('pending', 'active');
 
         // Category filtering
         if (category !== 'all') {
-            whereClause += ' AND category = $3';
+            whereClause += ' AND t.category = $3';
             queryParams.push(category);
         }
 
-        // Main data query
+        // Main data query - FIXED: Use tt.name instead of t.tournament_type
         const dataQuery = `
             SELECT
                 t.id,
                 t.title,
                 t.category,
-                t.tournament_type as "tournamentType",
+                tt.name as "tournamentType",
                 t.options,
                 t.entry_fee as "entryFee",
                 t.max_participants as "maxParticipants",
@@ -524,8 +524,9 @@ app.get('/api/tournaments', async (req, res) => {
                 COUNT(p.*)::integer as "participantCount"
             FROM tournaments t
             LEFT JOIN participants p ON t.id = p.tournament_id
+            LEFT JOIN tournament_types tt ON t.tournament_type_id = tt.id
             ${whereClause}
-            GROUP BY t.id
+            GROUP BY t.id, tt.name
             ORDER BY t.created_at DESC
             LIMIT $${queryParams.length + 1}
             OFFSET $${queryParams.length + 2}
@@ -534,7 +535,8 @@ app.get('/api/tournaments', async (req, res) => {
         // Count query for pagination
         const countQuery = `
             SELECT COUNT(*)
-            FROM tournaments
+            FROM tournaments t
+            LEFT JOIN tournament_types tt ON t.tournament_type_id = tt.id
             ${whereClause}
         `;
 
